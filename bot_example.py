@@ -8,9 +8,9 @@ from api import tiny_media
 #  Bot Settings.
 BOT_OPTIONS = {
     'prefix': '!',                  # Command prefix.
-    'opme_key': 'sdhfsdf6',         # key used when doing opme command.
-    'op_another': 'sdfsd7f',        # key used as command name when oping another.
-    'deop_another': 'd_sdhfsdf6',   # key used as command name when deoping another.
+    'opme_key': 'hk93jsdj',         # key used when doing opme command.
+    'op_another': 'eisdi3js',       # key used as command name when oping another.
+    'deop_another': 'd_eisdi3js',   # key used as command name when deoping another.
     'auto_message_enabled': True,   # auto message sender.
     'file_path': 'files/',          # the path to files.
     'badnicks': 'badnicks.txt'      # badnicks file.

@@ -20,7 +20,7 @@ def get_roomconfig_xml(room, roompass=None, proxy=None):
     else:
         xmlurl = 'http://apl.tinychat.com/api/find.room/%s?site=tinychat&url=tinychat.com' % room
 
-    web_content = web_request.get_request(xmlurl, proxy)
+    web_content = web_request.get_request(xmlurl, proxy=proxy)
     xml = parseString(web_content['content'])
 
     root = xml.getElementsByTagName('response')[0]
@@ -109,7 +109,7 @@ def get_bauth_token(roomname, nick, uid, proxy=None):
     """
     xmlurl = 'http://tinychat.com/api/broadcast.pw?site=tinychat&name=%s&nick=%s&id=%s' % (roomname, nick, uid)
 
-    web_content = web_request.get_request(xmlurl, proxy)
+    web_content = web_request.get_request(xmlurl, proxy=proxy)
     xml = parseString(web_content['content'])
 
     root = xml.getElementsByTagName('response')[0]

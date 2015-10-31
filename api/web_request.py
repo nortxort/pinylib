@@ -85,12 +85,12 @@ def find_hashes(url, proxy=None):
     :return: dict {'autoop', 'prohash'} str hashes.
     """
     autoop = u'none'
-    prohash = ''
+    prohash = None
 
-    html = get_request(url, proxy)
+    html = get_request(url, proxy=proxy)
     if ', autoop: "' in html['content']:
         autoop = html['content'].split(', autoop: "')[1].split('"')[0]
-    if ', prokey: "' in html['content']:
+    if ', prohash: "' in html['content']:
         prohash = html['content'].split(', prohash: "')[1].split('"')[0]
 
     return {'autoop': autoop, 'prohash': prohash}

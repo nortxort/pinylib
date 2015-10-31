@@ -150,7 +150,7 @@ class TinychatRTMPClient:
             # Not sure about this. But from what ive gathered, the cookies doesn't change, however they might expire.
             # The hashes on the other hand do change..
             # Try parsing a new set of hashes.
-            hashes = web_request.find_hashes(self.embed_url)
+            hashes = web_request.find_hashes(self.embed_url, proxy=self.proxy)
             self.autoop = hashes['autoop']
             self.prokey = hashes['prohash']
         else:
@@ -159,7 +159,7 @@ class TinychatRTMPClient:
                     login = web_request.post_login(self.account, self.password)
                     if 'pass' in login['cookies']:
                         console_write([COLOR['green'], 'Logged in as: ' + login['cookies']['user'], self.roomname])
-                        hashes = web_request.find_hashes(self.embed_url)
+                        hashes = web_request.find_hashes(self.embed_url, proxy=self.proxy)
                         self.autoop = hashes['autoop']
                         self.prokey = hashes['prohash']
                     else:
@@ -213,11 +213,11 @@ class TinychatRTMPClient:
                 tinychat_api.recaptcha(proxy=self.proxy)
                 cauth_cookie = tinychat_api.get_cauth_cookie(self.roomname, proxy=self.proxy)
 
-                self.connection = rtmp_protocol.RtmpClient(self.ip, self.port, self.tc_url,
-                                                           self.embed_url, self.swf_url, self.app)
+                self.connection = rtmp_protocol.RtmpClient(self.ip, self.port, self.tc_url, self.embed_url,
+                                                           self.swf_url, self.app, proxy=self.proxy)
 
-                self.connection.connect([self.roomname, self.autoop, self.roomtype,
-                                         u'tinychat', self.account, '', cauth_cookie])
+                self.connection.connect([self.roomname, self.autoop, self.roomtype, u'tinychat',
+                                         self.account, '', cauth_cookie, u'Desktop 1.0.0.0643'])
                 self.is_connected = True
                 self.callback()
             except Exception as e:
@@ -409,8 +409,9 @@ class TinychatRTMPClient:
                     print(amf0_data)
 
                 elif cmd == 'giftpoints':
-                    # Not exactly sure what this is about..
-                    print(amf0_data)
+                    uid = amf0_cmd[3]
+                    points = amf0_cmd[4]
+                    self.on_giftpoints(uid, points)
 
                 else:
                     console_write([COLOR['bright_red'], 'Unknown command:' + cmd, self.roomname])
@@ -441,6 +442,9 @@ class TinychatRTMPClient:
         else:
             console_write([COLOR['bright_green'], 'Captcha key found: ' + key, self.roomname])
             self.send_cauth_msg(key)
+            if self.prokey is not None:
+                # If a prohash was parsed, send pro message.
+                self.send_pro_msg()
             self.set_nick()
 
     def on_join(self, uid, nick):
@@ -509,6 +513,10 @@ class TinychatRTMPClient:
     def on_from_owner(self, owner_msg):
         msg = str(owner_msg).replace('notice', '').replace('%20', ' ')
         console_write([COLOR['bright_red'], msg, self.roomname])
+
+    def on_giftpoints(self, uid, points):
+        msg = 'User ID: ' + str(uid) + ' has ' + str(points) + ' giftpoints.'
+        console_write([COLOR['bright_yellow'], msg, self.roomname])
 
     def on_privmsg(self, msg, msg_sender):
         """
@@ -654,6 +662,12 @@ class TinychatRTMPClient:
         """
         bauth_key = tinychat_api.get_bauth_token(self.roomname, self.client_nick, self.client_id, proxy=self.proxy)
         self._sendCommand('bauth', [u'' + bauth_key])
+
+    def send_pro_msg(self):
+        """
+        Send the pro message needed to show as pro user.
+        """
+        self._sendCommand('pro', [u'' + self.prokey])
 
     def send_cauth_msg(self, cauthkey):
         """
