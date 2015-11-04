@@ -132,6 +132,7 @@ class TinychatRTMPClient:
         self.is_connected = False
         self.is_client_mod = False
         self.room_users = {}
+        self.id_and_nick = {}  # NEW
         self.is_reconnected = False
         self.uptime = 0
         # Bot instance attributes.
@@ -413,6 +414,15 @@ class TinychatRTMPClient:
                     points = amf0_cmd[4]
                     self.on_giftpoints(uid, points)
 
+                elif cmd == 'account':
+                    account_name = amf0_cmd[3]['account']
+                    uid = str(amf0_cmd[3]['id'])
+                    if uid != '0':
+                        if account_name == '$noinfo':
+                            self.user_is_guest(uid)
+                        else:
+                            self.user_has_account(uid, account_name)
+
                 else:
                     console_write([COLOR['bright_red'], 'Unknown command:' + cmd, self.roomname])
 
@@ -450,17 +460,20 @@ class TinychatRTMPClient:
     def on_join(self, uid, nick):
         user = self.add_user_info(nick)
         user.id = uid
+        self.id_and_nick[uid] = nick  # NEW
         if uid != self.client_id:
             console_write([COLOR['bright_cyan'], nick + ':' + uid + ' joined the room.', self.roomname])
+            self.send_userinfo_request_msg(uid)
 
     def on_joins(self, uid, nick):
         user = self.add_user_info(nick)
         user.id = uid
         if uid != self.client_id:
             console_write([COLOR['bright_green'], nick + ':' + uid, self.roomname])
+            self.id_and_nick[uid] = nick  # NEW
 
     def on_joinsdone(self):
-        self.send_userinfo_request_to_all()
+        thread.start_new_thread(self.send_userinfo_request_to_all, ())  # NEW
 
     def on_oper(self, uid, nick):
         user = self.add_user_info(nick)
@@ -485,7 +498,9 @@ class TinychatRTMPClient:
         old_info = self.find_user_info(old)
         if old in self.room_users.keys():
             del self.room_users[old]
+            del self.id_and_nick[uid]  # NEW
             self.room_users[new] = old_info
+            self.id_and_nick[uid] = new  # NEW
         if uid != self.client_id:
             console_write([COLOR['cyan'], old + ':' + uid + ' changed nick to: ' + new, self.roomname])
 
@@ -494,6 +509,7 @@ class TinychatRTMPClient:
 
     def on_quit(self, uid, name):
         del self.room_users[name]
+        del self.id_and_nick[uid]  # NEW
         console_write([COLOR['cyan'], name + ':' + uid + ' left the room.', self.roomname])
 
     def on_kick(self, uid, name):
@@ -515,30 +531,21 @@ class TinychatRTMPClient:
         console_write([COLOR['bright_red'], msg, self.roomname])
 
     def on_giftpoints(self, uid, points):
-        msg = 'User ID: ' + str(uid) + ' has ' + str(points) + ' giftpoints.'
+        msg = 'User ID: ' + str(self.id_and_nick[uid]) + ' has ' + str(points) + ' giftpoints.'
         console_write([COLOR['bright_yellow'], msg, self.roomname])
 
     def on_privmsg(self, msg, msg_sender):
         """
         Message controller.
 
-        This method will figure out if the message is a userinfo request, userinfo response, media
-        playing/stoping or if it's a private message. If it's not, we pass the message along to message_handler.
-
+        This method will figure out if the message is a media playing/stoping or if it's a private message.
+        If it's not, we pass the message along to message_handler.
         :param msg: str message.
         :param msg_sender: str the sender of the message.
         """
         if msg.startswith('/'):
             msg_cmd = msg.split(' ')
-            if msg_cmd[0] == '/userinfo':
-                if msg_cmd[1] == '$request':
-                    self.info_request_from(msg_sender)
-                elif msg_cmd[1] == '$noinfo':
-                    self.user_is_guest(msg_sender)
-                else:
-                    self.user_has_account(msg_sender, msg_cmd[1].lower())
-
-            elif msg_cmd[0] == '/msg':
+            if msg_cmd[0] == '/msg':
                 private_msg = ' '.join(msg_cmd[2:])
                 self.private_message_handler(msg_sender, private_msg)
 
@@ -596,34 +603,26 @@ class TinychatRTMPClient:
         console_write([COLOR['bright_magenta'], usr_nick + ' closed the ' + media_type, self.roomname])
 
     # User Info Events
-    def info_request_from(self, usr_nick):
-        """
-        A user requests our user info.
-        :param usr_nick: str the user name of the user requesting our user info.
-        """
-        self.send_userinfo_response_to(usr_nick, self.roomname)
-        console_write([COLOR['bright_yellow'], usr_nick + ' requests userinfo.', self.roomname])
-
-    def user_is_guest(self, usr_nick):
+    def user_is_guest(self, uid):  # NEW
         """
         The user tells us that they are a guest.
-        :param usr_nick: str the user that is a guest.
+        :param uid: str the user ID of the guest user.
         """
-        user = self.add_user_info(usr_nick)
-        user.user_account = False
-        console_write([COLOR['bright_yellow'], usr_nick + ' is not signed in.', self.roomname])
+        user = self.add_user_info(self.id_and_nick[uid])
+        user.account = False
+        console_write([COLOR['bright_yellow'], str(self.id_and_nick[uid]) + ' is not signed in.', self.roomname])
 
-    def user_has_account(self, usr_nick, usr_acc):
+    def user_has_account(self, uid, usr_acc):  # NEW
         """
         A user replies to our user info request, that they have a account name.
         We look up the account using tinychat's API and add the info to the user object.
 
-        :param usr_nick: str the user name of the user having an account.
+        :param uid: str the user ID of the user having an account.
         :param usr_acc: str the account that the user has.
         """
-        user = self.add_user_info(usr_nick)
+        user = self.add_user_info(self.id_and_nick[uid])
         user.user_account = usr_acc
-        console_write([COLOR['bright_yellow'], usr_nick + ' has account: ' + usr_acc, self.roomname])
+        console_write([COLOR['bright_yellow'], str(self.id_and_nick[uid]) + ' has account: ' + usr_acc, self.roomname])
         tc_info = tinychat_api.tinychat_user_info(usr_acc)
         if tc_info is not None:
             user.tinychat_id = tc_info['tinychat_id']
@@ -721,33 +720,23 @@ class TinychatRTMPClient:
             self._sendCommand('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg), u'' + random_color() + ',en', u'n' + user.id + '-' + nick])
             self._sendCommand('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg), u'' + random_color() + ',en', u'b' + user.id + '-' + nick])
 
-    def send_userinfo_response_to(self, nick, info):
+    def send_userinfo_request_msg(self, user_id):  # NEW
         """
-        Send a userinfo response to a user that requests our userinfo.
-        :param nick: str the user name to send the userinfo to.
-        :param info: str the user info to send. This should be a account name.
+        Send user info request to a user.
+        :param user_id: str user id of the user we want info from.
+        :return:
         """
-        user = self.find_user_info(nick)
-        if user is not None:
-            self._sendCommand('privmsg', [u'' + self._encode_msg('/userinfo' + ' ' + u'' + info), '#0,en', u'n' + user.id + '-' + nick])
-            self._sendCommand('privmsg', [u'' + self._encode_msg('/userinfo' + ' ' + u'' + info), '#0,en', u'b' + user.id + '-' + nick])
-
-    def send_userinfo_request_msg(self, nick):
-        """
-        Request userinfo from a user.
-        :param nick: str the user name of the user we want info from.
-        """
-        user = self.find_user_info(nick)
-        if user is not None:
-            self._sendCommand('privmsg', [u'' + self._encode_msg('/userinfo $request'), '#0,en', u'b' + user.id + '-' + nick])
-            self._sendCommand('privmsg', [u'' + self._encode_msg('/userinfo $request'), '#0,en', u'n' + user.id + '-' + nick])
+        self._sendCommand('account', [u'' + str(user_id)])
 
     def send_userinfo_request_to_all(self):
         """
         Request userinfo from all users.
         Only used when we join a room.
+        NOTE: This method MUST be started in a new thread!
         """
-        self._sendCommand('privmsg', [u'' + self._encode_msg('/userinfo $request'), '#0,en'])
+        for user_id in self.id_and_nick.keys():
+            self.send_userinfo_request_msg(user_id)
+            time.sleep(10)  # Delay between request to avoid being server banned. Might need to be higher..
 
     def send_undercover_msg(self, nick, msg):
         """
