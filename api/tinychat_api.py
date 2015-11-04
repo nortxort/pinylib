@@ -48,19 +48,21 @@ def tinychat_user_info(tc_account):
     """
     Finds info for a given tinychat account name.
     :param tc_account: str the account name.
-    :return: dict {'username', 'tinychat_id', 'last_active'}
+    :return: dict {'username', 'tinychat_id', 'last_active', 'name', 'location'}
     """
-    xmlurl = 'http://tinychat.com/api/tcinfo?format=xml&username=%s' % tc_account
-    web_content = web_request.get_request(xmlurl)
-    try:
-        xml = parseString(web_content['content'])
-        root = xml.getElementsByTagName('result')[0]
-        username = root.getAttribute('username')
-        user_id = root.getAttribute('id')
-        last_active = time.ctime(int(root.getAttribute('last_active')))
+    url = 'http://tinychat.com/api/tcinfo?username=%s' % tc_account
+    json_data = web_request.get_request(url=url, json=True)
 
-        return {'username': username, 'tinychat_id': user_id, 'last_active': last_active}
-    except:
+    try:
+        username = json_data['content']['username']
+        user_id = json_data['content']['id']
+        last_active = time.ctime(int(json_data['content']['last_active']))
+        name = json_data['content']['name']
+        location = json_data['content']['location']
+
+        return {'username': username, 'tinychat_id': user_id, 'last_active': last_active,
+                'name': name, 'location': location}
+    except KeyError:
         return None
 
 
