@@ -31,13 +31,12 @@ def eightball():
 
 
 class TinychatBot(tinychat.TinychatRTMPClient):
-    """ Overwriting TinychatRTMPClient event methods that we want the bot to react to. """
-
+    """ Overrides event methods in TinychatRTMPClient that we want the bot to react to. """
     def on_joinsdone(self):
         if not self.is_reconnected:
             if BOT_OPTIONS['auto_message_enabled']:
                 thread.start_new_thread(self.start_auto_msg_sender, ())
-        self.send_userinfo_request_to_all()
+        thread.start_new_thread(self.send_userinfo_request_to_all, ())  # NEW
 
     def on_avon(self, uid, name):
         if self.no_cam:
@@ -49,8 +48,10 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         old_info = self.find_user_info(old)
         if old in self.room_users.keys():
             del self.room_users[old]
+            del self.id_and_nick[uid]  # NEW
             # Update user info
             self.room_users[new] = old_info
+            self.id_and_nick[uid] = new  # NEW
         # Is it a new user joining?
         if str(old).startswith('guest-') and uid != self.client_id:
             bad_nicks = tinychat.fh.file_reader(BOT_OPTIONS['file_path'], BOT_OPTIONS['badnicks'])
@@ -62,7 +63,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 # Else greet the user. Should we have a command to enable/disable greetings?
                 self.send_bot_msg('*Welcome to* ' + self.roomname + ' *' + new + '*', self.is_client_mod)
                 # Get users profile info.
-                self.send_userinfo_request_msg(new)
+                # self.send_userinfo_request_msg(new)
                 # Is medie playing?
                 if len(self.playlist) is not 0:
                     play_type = self.playlist[self.inowplay]['type']
@@ -153,6 +154,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     if self.is_client_mod:
                         if len(cmd_param) is 0:
                             self.send_bot_msg('Missing username.', self.is_client_mod)
+                        elif cmd_param == self.client_nick:
+                            self.send_bot_msg('Action not allowed.', self.is_client_mod)
                         else:
                             user = self.find_user_info(cmd_param)
                             if user is None:
@@ -168,6 +171,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     if self.is_client_mod:
                         if len(cmd_param) is 0:
                             self.send_bot_msg('Missing username.', self.is_client_mod)
+                        elif cmd_param == self.client_nick:
+                            self.send_bot_msg('Action not allowed.', self.is_client_mod)
                         else:
                             user = self.find_user_info(cmd_param)
                             if user is None:
@@ -459,7 +464,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     if tc_usr is None:
                         self.send_undercover_msg(msg_sender, 'Could not find tinychat info for: ' + cmd_param)
                     else:
-                        self.send_undercover_msg(msg_sender, 'ID: ' + tc_usr['tinychat_id'] + ', Last login: ' + tc_usr['last_activ'])
+                        self.send_undercover_msg(msg_sender, 'ID: ' + tc_usr['tinychat_id'] + ', Last login: ' + tc_usr['last_active'])
 
             # Other API commands.
             elif cmd == BOT_OPTIONS['prefix'] + 'urb':
