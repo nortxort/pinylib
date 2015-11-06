@@ -447,11 +447,13 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     elif spy_info == 'PW':
                         self.send_undercover_msg(msg_sender, 'The room is password protected.')
                     else:
-                        self.send_undercover_msg(msg_sender, '*mods:* ' + spy_info['mod_count'] +
+                        self.send_undercover_msg(msg_sender,
+                                                 '*mods:* ' + spy_info['mod_count'] +
                                                  ' *Broadcasters:* ' + spy_info['broadcaster_count'] +
                                                  ' *Users:* ' + spy_info['total_count'])
                         if user_check.is_mod or user_check.has_power:
-                            self.send_undercover_msg(msg_sender, '*' + spy_info['users'] + '*')
+                            users = ', '.join(spy_info['users'])
+                            self.send_undercover_msg(msg_sender, '*' + users + '*')
 
             elif cmd.lower() == BOT_OPTIONS['prefix'] + 'usrspy':
                 # Finds information for a tinychat account.
@@ -607,7 +609,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 else:
                     self.no_guests = True
                     self.send_private_bot_msg('*Guests are NOT allowed to join.*', msg_sender)
-                    
+
         # Public PM commands.
         elif pm_cmd == BOT_OPTIONS['prefix'] + 'pm':
             # Makes the bot work as a PM bridge between 2 users who are NOT signed in.
