@@ -251,7 +251,7 @@ def weather_search(city):
     """
 
     if str(city).strip():
-        api_key = '' # A working API key.
+        api_key = ''  # A working API key
         if not api_key:
             return 'Missing api key.'
         else:
