@@ -138,6 +138,7 @@ class TinychatRTMPClient:
         # Bot instance attributes.
         # These are only for the bot_example.py file, and as such can be removed.
         self.no_cam = False
+        self.no_guests = False
         self.elapsed_track_time = 0
         self.remaining_track_time = 0
         self.playlist = []
@@ -148,7 +149,7 @@ class TinychatRTMPClient:
     def prepare_connect(self):
         """ Gather necessary connection parameters before attempting to connect. """
         if self.is_reconnected and self.account and self.password:
-            # Not sure about this. But from what ive gathered, the cookies doesn't change, however they might expire.
+            # Not sure about this. But from what i understand, the cookies doesn't change, however they might expire.
             # The hashes on the other hand do change..
             # Try parsing a new set of hashes.
             hashes = web_request.find_hashes(self.embed_url, proxy=self.proxy)
@@ -233,6 +234,7 @@ class TinychatRTMPClient:
                 self.is_connected = False
                 self.is_client_mod = False
                 self.room_users.clear()
+                self.id_and_nick.clear()  # NEW
                 self.uptime = 0
                 self.connection.shutdown()
             except Exception as e:
@@ -463,7 +465,7 @@ class TinychatRTMPClient:
         self.id_and_nick[uid] = nick  # NEW
         if uid != self.client_id:
             console_write([COLOR['bright_cyan'], nick + ':' + uid + ' joined the room.', self.roomname])
-            self.send_userinfo_request_msg(uid)
+            self.send_userinfo_request_msg(uid)  # NEW
 
     def on_joins(self, uid, nick):
         user = self.add_user_info(nick)
