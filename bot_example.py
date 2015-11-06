@@ -57,14 +57,12 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             bad_nicks = tinychat.fh.file_reader(BOT_OPTIONS['file_path'], BOT_OPTIONS['badnicks'])
             # Check if the user name is in the badnicks file.
             if bad_nicks is not None and new in bad_nicks:
-                # User name is in the badnicks file, so we ban the user.
+                # User name is in the badnicks file, ban the user.
                 self.send_ban_msg(new, uid)
             else:
                 # Else greet the user. Should we have a command to enable/disable greetings?
                 self.send_bot_msg('*Welcome to* ' + self.roomname + ' *' + new + '*', self.is_client_mod)
-                # Get users profile info.
-                # self.send_userinfo_request_msg(new)
-                # Is medie playing?
+                # Is media playing?
                 if len(self.playlist) is not 0:
                     play_type = self.playlist[self.inowplay]['type']
                     video_id = self.playlist[self.inowplay]['video_id']
@@ -600,11 +598,49 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     self.no_cam = True
                     self.send_private_bot_msg('*Broadcasting is NOT allowed.*', msg_sender)
 
-        elif pm_cmd == BOT_OPTIONS['prefix'] + 'banall':
-            pass
+        elif pm_cmd == BOT_OPTIONS['prefix'] + 'noguest':
+            # Toggles no guest allowed to join on/off.
+            if user_check.is_mod or user_check.has_power:
+                if self.no_guests:
+                    self.no_guests = False
+                    self.send_private_bot_msg('*Guests ARE allowed to join.*', msg_sender)
+                else:
+                    self.no_guests = True
+                    self.send_private_bot_msg('*Guests are NOT allowed to join.*', msg_sender)
+                    
+        # Public PM commands.
+        elif pm_cmd == BOT_OPTIONS['prefix'] + 'pm':
+            # Makes the bot work as a PM bridge between 2 users who are NOT signed in.
+            # User a does !pmme to start a pm session, then does !pm b message
+            # and user b responds with !pm a message
+            # Thereby user a and b will be able to PM each other using the bot as a bridge.
+            if len(priv_msg_parts[1]) is not 0:
+                user = self.find_user_info(priv_msg_parts[1])
+                if user is not None:
+                    pm_msg = ' '.join(priv_msg_parts[2:])
+                    self.send_private_bot_msg(msg_sender + ': ' + pm_msg, str(user.nick))
+                else:
+                    self.send_private_bot_msg('No user named: ' + str(priv_msg_parts[1]), msg_sender)
+
+
 
         # Print to console.
         tinychat.console_write([tinychat.COLOR['white'], 'Private message from ' + msg_sender + ':' + private_msg, self.roomname])
+
+    # User Info Events
+    def user_is_guest(self, uid):  # NEW
+        """
+        The user tells us that they are a guest.
+        :param uid: str the user ID of the guest user.
+        """
+        if self.no_guests and self.is_client_mod:
+            # Kick users not signed in.
+            self.send_ban_msg(str(self.id_and_nick[uid]), str(uid))
+            self.send_forgive_msg(uid)
+        else:
+            user = self.add_user_info(self.id_and_nick[uid])
+            user.account = False
+        tinychat.console_write([tinychat.COLOR['bright_yellow'], str(self.id_and_nick[uid]) + ' is not signed in.', self.roomname])
 
     #  Timed auto functions.
     def start_playlist(self):
