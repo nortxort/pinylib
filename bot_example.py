@@ -225,7 +225,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                                 if len(self.playlist) is not 0:
                                     counter = 0
                                     for i in range(self.inowplay, len(self.playlist)):
-                                        v_time = self._milliseconds_to_HMS(self.playlist[i]['video_time'])
+                                        v_time = self.milliseconds_to_HMS(self.playlist[i]['video_time'])
                                         v_title = self.playlist[i]['video_title']
                                         if counter <= 4:
                                             if counter == 0:
@@ -265,7 +265,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                             self.search_list = tiny_media.youtube_search_list(cmd_param, results=5)
                             if len(self.search_list) is not 0:
                                 for i in range(0, len(self.search_list)):
-                                    v_time = self._milliseconds_to_HMS(self.search_list[i]['video_time'])
+                                    v_time = self.milliseconds_to_HMS(self.search_list[i]['video_time'])
                                     v_title = self.search_list[i]['video_title']
                                     self.send_owner_run_msg('(%s) *%s* %s' % (i, v_title, v_time))
                             else:
@@ -351,7 +351,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     if self.inowplay + 1 == len(self.playlist):
                         self.send_bot_msg('This is the last tune in the playlist.', self.is_client_mod)
                     else:
-                        play_time = self._milliseconds_to_HMS(self.playlist[self.inowplay + 1]['video_time'])
+                        play_time = self.milliseconds_to_HMS(self.playlist[self.inowplay + 1]['video_time'])
                         play_title = self.playlist[self.inowplay + 1]['video_title']
                         self.send_bot_msg('*Next tune is:* ' + play_title + ' ' + play_time, self.is_client_mod)
 
@@ -364,7 +364,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     if youtube is None:
                         self.send_bot_msg('Could not find video: ' + cmd_param, self.is_client_mod)
                     else:
-                        play_time = self._milliseconds_to_HMS(youtube['video_time'])
+                        play_time = self.milliseconds_to_HMS(youtube['video_time'])
                         video_title = youtube['video_title']
                         self.send_bot_msg('*Added:* ' + video_title + ' *to playlist.* ' + play_time, self.is_client_mod)
                         self.playlist.append(youtube)
@@ -380,7 +380,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     if soundcloud is None:
                         self.send_bot_msg('Could not find video: ' + cmd_param, self.is_client_mod)
                     else:
-                        self.send_bot_msg('*Added:* ' + soundcloud['video_title'] + ' *to playlist.*', self.is_client_mod)
+                        self.send_bot_msg('*Added:* ' + soundcloud['video_title'] + ' *to playlist.* ' +
+                                          self.milliseconds_to_HMS(soundcloud['track_time']), self.is_client_mod)
                         self.playlist.append(soundcloud)
                         if len(self.playlist) == 2:
                             thread.start_new_thread(self.start_playlist, ())
@@ -388,7 +389,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             elif cmd == BOT_OPTIONS['prefix'] + 'ply':
                 # Plays a youtube video.
                 if len(self.playlist) >= 2:
-                    self.send_bot_msg('Cannot play youtube when playlist is playing. Use *!adl* instead.', self.is_client_mod)
+                    self.send_bot_msg('Cannot play youtube when playlist is playing. Use *!adl* instead.',
+                                      self.is_client_mod)
                 else:
                     if len(cmd_param) is 0:
                         self.send_bot_msg('Please specify youtube title, id or link.', self.is_client_mod)
@@ -413,7 +415,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             elif cmd == BOT_OPTIONS['prefix'] + 'plysc':
                 # Plays a soundcloud.
                 if len(self.playlist) >= 2:
-                    self.send_bot_msg('Cannot play soundcloud when playlist is playing. Use *!adlsc* instead.', self.is_client_mod)
+                    self.send_bot_msg('Cannot play soundcloud when playlist is playing. Use *!adlsc* instead.',
+                                      self.is_client_mod)
                 else:
                     if len(cmd_param) is 0:
                         self.send_bot_msg('Please specify soundcloud title or id.', self.is_client_mod)
@@ -624,10 +627,9 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 else:
                     self.send_private_bot_msg('No user named: ' + str(priv_msg_parts[1]), msg_sender)
 
-
-
         # Print to console.
-        tinychat.console_write([tinychat.COLOR['white'], 'Private message from ' + msg_sender + ':' + private_msg, self.roomname])
+        tinychat.console_write([tinychat.COLOR['white'], 'Private message from ' + msg_sender + ':' + private_msg,
+                                self.roomname])
 
     # User Info Events
     def user_is_guest(self, uid):  # NEW
@@ -642,7 +644,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         else:
             user = self.add_user_info(self.id_and_nick[uid])
             user.account = False
-        tinychat.console_write([tinychat.COLOR['bright_yellow'], str(self.id_and_nick[uid]) + ' is not signed in.', self.roomname])
+        tinychat.console_write([tinychat.COLOR['bright_yellow'], str(self.id_and_nick[uid]) + ' is not signed in.',
+                                self.roomname])
 
     #  Timed auto functions.
     def start_playlist(self):
@@ -694,7 +697,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         if len(self.playlist) is not 0:
             if self.inowplay + 1 < len(self.playlist):
                 next_video_title = self.playlist[self.inowplay + 1]['video_title']
-                next_video_time = self._milliseconds_to_HMS(self.playlist[self.inowplay + 1]['video_time'])
+                next_video_time = self.milliseconds_to_HMS(self.playlist[self.inowplay + 1]['video_time'])
                 upnext = 'Up next is: ' + next_video_title + ' ' + next_video_time
             inquee = len(self.playlist) - self.inowplay - 1
             plstat = str(len(self.playlist)) + ' *items in the playlist.* ' + str(inquee) + ' *Still in queue.*'
@@ -720,7 +723,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 break
 
     # Helper Methods.
-    def _milliseconds_to_HMS(self, milliseconds):
+    def milliseconds_to_HMS(self, milliseconds):
         """
         Converts milliseconds to hours minutes seconds.
         :param milliseconds: int the milliseconds to convert.
