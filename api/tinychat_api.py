@@ -70,32 +70,27 @@ def spy_info(room):
     """
     Finds info for a given room name.
 
-    The info is how many mods, broadcasters, users and a comma separated string(users) with all the user names.
+    The info shows many mods, broadcasters, total users and a users(list) with all the user names.
 
     :param room: str the room name to get spy info for.
-    :return: dict{'mod_count', 'broadcaster_count', 'total_count', 'users'} or None on password protected room/failure.
+    :return: dict{'mod_count', 'broadcaster_count', 'total_count', list('users')} or PW on password protected room.,
+    or None on failure or empty room.
     """
-    xmlurl = 'http://api.tinychat.com/%s.xml' % room
-    passcheck = get_roomconfig_xml(room)
-    if passcheck == 'PW':
-        return passcheck
+    url = 'http://api.tinychat.com/%s.json' % room
+    check = get_roomconfig_xml(room)
+    if check == 'PW':
+        return check
     else:
-        web_content = web_request.get_request(xmlurl)
-        xml = parseString(web_content['content'])
         try:
-            root = xml.getElementsByTagName('tinychat')[0]
-            mod_count = root.getAttribute('mod_count')
-            broadcaster_count = root.getAttribute('broadcaster_count')
-            total_count = root.getAttribute('total_count')
+            json_data = web_request.get_request(url, json=True)
+            mod_count = json_data['content']['mod_count']
+            broadcaster_count = json_data['content']['broadcaster_count']
+            total_count = int(json_data['content']['total_count'])
             if total_count > 0:
-                u = []
-                names = xml.getElementsByTagName('names')
-                for name in names:
-                    u.append(name.firstChild.nodeValue)
-                users = ', '.join(u)
+                users = json_data['content']['names']
                 return {'mod_count': mod_count, 'broadcaster_count': broadcaster_count,
                         'total_count': total_count, 'users': users}
-        except IndexError:
+        except (IndexError, KeyError):
             return None
 
 
