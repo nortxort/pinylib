@@ -94,17 +94,20 @@ def spy_info(room):
             return None
 
 
-def get_bauth_token(roomname, nick, uid, proxy=None):
-    #  A token IS present even if password is enabled, will it work? needs more testing..
+def get_bauth_token(roomname, nick, uid, greenroom, proxy=None):
     """
     Find the bauth token needed before we can start a broadcast.
     :param roomname: str the room name.
     :param nick: str the nick we use in the room.
     :param uid: str our ID in the room.
+    :param greenroom: bool should be True if greenroom is enabled.
     :param proxy: str use a proxy for this request.
     :return: str token or PW if a password is needed to broadcast.
     """
-    xmlurl = 'http://tinychat.com/api/broadcast.pw?site=tinychat&name=%s&nick=%s&id=%s' % (roomname, nick, uid)
+    if greenroom:
+        xmlurl = 'http://tinychat.com/api/broadcast.pw?site=greenroom&name=%s&nick=%s&id=%s' % (roomname, nick, uid)
+    else:
+        xmlurl = 'http://tinychat.com/api/broadcast.pw?site=tinychat&name=%s&nick=%s&id=%s' % (roomname, nick, uid)
 
     web_content = web_request.get_request(xmlurl, proxy=proxy)
     xml = parseString(web_content['content'])
@@ -116,7 +119,6 @@ def get_bauth_token(roomname, nick, uid, proxy=None):
     else:
         token = root.getAttribute('token')
         return token
-
 
 def get_captcha_key(roomname, uid, proxy=None):
     """
