@@ -412,8 +412,8 @@ class TinychatRTMPClient:
                     print(amf0_data)
 
                 elif cmd == 'giftpoints':
-                    uid = amf0_cmd[3]
-                    points = amf0_cmd[4]
+                    uid = str(amf0_cmd[3])
+                    points = str(amf0_cmd[4])
                     self.on_giftpoints(uid, points)
 
                 elif cmd == 'account':
@@ -498,6 +498,7 @@ class TinychatRTMPClient:
 
     def on_nick(self, old, new, uid):
         old_info = self.find_user_info(old)
+        old_info.nick = new
         if old in self.room_users.keys():
             del self.room_users[old]
             del self.id_and_nick[uid]  # NEW
@@ -533,7 +534,7 @@ class TinychatRTMPClient:
         console_write([COLOR['bright_red'], msg, self.roomname])
 
     def on_giftpoints(self, uid, points):
-        msg = 'User ID: ' + str(self.id_and_nick[uid]) + ' has ' + str(points) + ' giftpoints.'
+        msg = 'User ID: ' + self.id_and_nick[uid] + ' has ' + points + ' giftpoints.'
         console_write([COLOR['bright_yellow'], msg, self.roomname])
 
     def on_privmsg(self, msg, msg_sender):
@@ -661,8 +662,9 @@ class TinychatRTMPClient:
         """
         Get and send the bauth key needed before we can start a broadcast.
         """
-        bauth_key = tinychat_api.get_bauth_token(self.roomname, self.client_nick, self.client_id, proxy=self.proxy)
-        self._sendCommand('bauth', [u'' + bauth_key])
+        bauth_key = tinychat_api.get_bauth_token(self.roomname, self.client_nick, self.client_id, self.greenroom, proxy=self.proxy)
+        if bauth_key != 'PW':
+            self._sendCommand('bauth', [u'' + bauth_key])
 
     def send_pro_msg(self):
         """
