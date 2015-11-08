@@ -450,7 +450,7 @@ class TinychatRTMPClient:
         console_write([COLOR['bright_green'], 'registered with ID: ' + self.client_id + '. Trying to parse captcha key.', self.roomname])
         key = tinychat_api.get_captcha_key(self.roomname, self.client_id, proxy=self.proxy)
         if key is None:
-            console_write([COLOR['bright_red'], 'There was a problem parsing the captcha key. Key=' + key, self.roomname])
+            console_write([COLOR['bright_red'], 'There was a problem parsing the captcha key. Key=' + str(key), self.roomname])
         else:
             console_write([COLOR['bright_green'], 'Captcha key found: ' + key, self.roomname])
             self.send_cauth_msg(key)
