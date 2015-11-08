@@ -13,7 +13,8 @@ BOT_OPTIONS = {
     'deop_another': 'd_eisdi3js',   # key used as command name when deoping another.
     'auto_message_enabled': True,   # auto message sender.
     'file_path': 'files/',          # the path to files.
-    'badnicks': 'badnicks.txt'      # badnicks file.
+    'badnicks': 'badnicks.txt',     # badnicks file.
+    'badwords': 'badwords.txt'      # bad words file.
 }
 
 
@@ -46,6 +47,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
 
     def on_nick(self, old, new, uid):
         old_info = self.find_user_info(old)
+        old_info.nick = new
         if old in self.room_users.keys():
             del self.room_users[old]
             del self.id_and_nick[uid]  # NEW
@@ -186,10 +188,14 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                         if len(cmd_param) is 0:
                             self.send_bot_msg('Missing username.', self.is_client_mod)
                         else:
-                            if cmd_param in tinychat.fh.file_reader(BOT_OPTIONS['file_path'], BOT_OPTIONS['badnicks']):
-                                self.send_bot_msg(cmd_param + ' is already in list.', self.is_client_mod)
-                            else:
+                            badnicks = tinychat.fh.file_reader(BOT_OPTIONS['file_path'], BOT_OPTIONS['badnicks'])
+                            if badnicks is None:
                                 tinychat.fh.file_writer(BOT_OPTIONS['file_path'], BOT_OPTIONS['badnicks'], cmd_param)
+                            else:
+                                if cmd_param in badnicks:
+                                    self.send_bot_msg(cmd_param + ' is already in list.', self.is_client_mod)
+                                else:
+                                    tinychat.fh.file_writer(BOT_OPTIONS['file_path'], BOT_OPTIONS['badnicks'], cmd_param)
                     else:
                         self.send_bot_msg('Command not enabled.')
 
@@ -208,6 +214,42 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 elif cmd == BOT_OPTIONS['prefix'] + 'clrbn':
                     # Clears the bad nick file.
                     tinychat.fh.delete_file_content(BOT_OPTIONS['file_path'], BOT_OPTIONS['badnicks'])
+
+                elif cmd == BOT_OPTIONS['prefix'] + 'bw':
+                    # Adds a bad word to the bad words file.
+                    if self.is_client_mod:
+                        bad_word = cmd_param.strip()
+                        if len(bad_word) is 0:
+                            self.send_bot_msg('Bad word can\'t be blank string', self.is_client_mod)
+                        elif len(bad_word) < 3:
+                            self.send_bot_msg('Bad word to short: ' + str(len(bad_word)), self.is_client_mod)
+                        else:
+                            badwords = tinychat.fh.file_reader(BOT_OPTIONS['file_path'], BOT_OPTIONS['badwords'])
+                            if badwords is None:
+                                tinychat.fh.file_writer(BOT_OPTIONS['file_path'], BOT_OPTIONS['badwords'], bad_word)
+                            else:
+                                if bad_word in badwords:
+                                    self.send_bot_msg(cmd_param + ' is already in list.', self.is_client_mod)
+                                else:
+                                    tinychat.fh.file_writer(BOT_OPTIONS['file_path'], BOT_OPTIONS['badwords'], bad_word)
+                    else:
+                        self.send_bot_msg('Command not enabled.')
+
+                elif cmd == BOT_OPTIONS['prefix'] + 'rmbw':
+                    # Removes a bad word from the bad words file.
+                    if self.is_client_mod:
+                        if len(cmd_param.strip()) is 0:
+                            self.send_bot_msg('Missing word string', self.is_client_mod)
+                        else:
+                            rem = tinychat.fh.remove_from_file(BOT_OPTIONS['file_path'], BOT_OPTIONS['badwords'], cmd_param)
+                            if rem:
+                                self.send_bot_msg(cmd_param + ' was removed.')
+                    else:
+                        self.send_bot_msg('Command not enabled.')
+
+                elif cmd == BOT_OPTIONS['prefix'] + 'clrbw':
+                    # Clears the bad words file.
+                    tinychat.fh.delete_file_content(BOT_OPTIONS['file_path'], BOT_OPTIONS['badwords'])
 
                 elif cmd == BOT_OPTIONS['prefix'] + 'list':
                     # Shows info about different lists.
@@ -524,6 +566,9 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         else:
             #  Print chat message to console.
             tinychat.console_write([tinychat.COLOR['green'], msg_sender + ':' + msg, self.roomname])
+            # Only check for bad words if we are mod.
+            if self.is_client_mod:
+                self.check_msg_for_bad_word(msg, user_check)
 
     def private_message_handler(self, msg_sender, private_msg):
         """
@@ -737,6 +782,22 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         else:
             human_time = '%d:%02d:%02d' % (h, m, s)
         return human_time
+
+    def check_msg_for_bad_word(self, msg, user):
+        """
+        Checks the chat message for bad words.
+        :param msg: str the chat message.
+        :param user: object user object.
+        """
+        msg_words = msg.split(' ')
+        bad_words = tinychat.fh.file_reader(BOT_OPTIONS['file_path'], BOT_OPTIONS['badwords'])
+        if bad_words is not None:
+            for word in msg_words:
+                if word in bad_words:
+                    self.send_ban_msg(user.nick, user.id)
+                    # If you wanted to ban the user, then remove next line.
+                    self.send_forgive_msg(user.id)
+                    self.send_bot_msg('*Auto-banned*: (bad word in message)', self.is_client_mod)
 
 
 def main():
