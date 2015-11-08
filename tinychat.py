@@ -558,7 +558,7 @@ class TinychatRTMPClient:
             elif msg_cmd[0] == '/mbc':
                 self.user_closed_media(msg_cmd[1], msg_sender)
 
-            elif msg_cmd[0] == 'mbpa':
+            elif msg_cmd[0] == '/mbpa':
                 pass
 
             elif msg_cmd[0] == '/mbpl':
