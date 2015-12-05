@@ -27,7 +27,7 @@ def get_request(url, json=False, proxy=None):
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
-            'Referer': 'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0643.swf?version=1.0.0.0643'
+            'Referer': 'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0645.swf?version=1.0.0.0645'
         }
 
     if proxy:
@@ -80,7 +80,7 @@ def post_login(account, password):
 
 def find_hashes(url, proxy=None):
     """
-    Find the hashes needed to become mod/pro. (Exactly how the prohahs is used i don't know)
+    Find the hashes needed to become mod/pro.
     :param url: str the url to the profile page.
     :return: dict {'autoop', 'prohash'} str hashes.
     """

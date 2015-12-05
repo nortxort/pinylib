@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import time
 import thread
 import random
@@ -8,7 +9,6 @@ from files import file_handler as fh
 from rtmp import rtmp_protocol
 
 # TODO: Error handling.
-# TODO: Fix encoding problems.
 
 #  Basic settings.
 SETTINGS = {
@@ -60,7 +60,10 @@ def console_write(info_list):
     """
     ts = time.strftime('%H:%M:%S')
     info = COLOR['white'] + '[' + ts + ']' + Style.RESET_ALL + ' ' + info_list[0] + info_list[1]
-    print(info)
+    try:
+        print(info)
+    except UnicodeEncodeError:
+        pass
 
     #  Is logging enabled?
     if SETTINGS['log']:
@@ -78,7 +81,7 @@ def write_to_log(msg, room_name):
     """
     d = time.strftime('%Y-%m-%d')
     file_name = d + '_' + room_name + '.log'
-    fh.file_writer(SETTINGS['log_path'], file_name, msg)
+    fh.file_writer(SETTINGS['log_path'], file_name, msg.encode('ascii', 'ignore'))
 
 
 def random_color():
@@ -101,6 +104,7 @@ class RoomUser:
         self.nick = nick
         self.id = uid
         self.last_msg = last_msg
+        self.is_owner = False
         self.is_mod = False
         self.has_power = False
         self.user_account = None
@@ -124,7 +128,7 @@ class TinychatRTMPClient:
         self.port = port
         self.proxy = proxy
         self.greenroom = False
-        self.swf_url = u'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0643.swf?version=1.0.0.0643/[[DYNAMIC]]/8'
+        self.swf_url = u'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0645.swf?version=1.0.0.0645/[[DYNAMIC]]/8'
         self.embed_url = u'http://tinychat.com/' + self.roomname
         self.autoop = None
         self.prokey = None
@@ -132,25 +136,13 @@ class TinychatRTMPClient:
         self.is_connected = False
         self.is_client_mod = False
         self.room_users = {}
-        self.id_and_nick = {}  # NEW
+        self.id_and_nick = {}
         self.is_reconnected = False
         self.uptime = 0
-        # Bot instance attributes.
-        # These are only for the bot_example.py file, and as such can be removed.
-        self.no_cam = False
-        self.no_guests = False
-        self.elapsed_track_time = 0
-        self.remaining_track_time = 0
-        self.playlist = []
-        self.search_list = []
-        self.inowplay = 0
-        self.play = True
 
     def prepare_connect(self):
         """ Gather necessary connection parameters before attempting to connect. """
         if self.is_reconnected and self.account and self.password:
-            # Not sure about this. But from what i understand, the cookies doesn't change, however they might expire.
-            # The hashes on the other hand do change..
             # Try parsing a new set of hashes.
             hashes = web_request.find_hashes(self.embed_url, proxy=self.proxy)
             self.autoop = hashes['autoop']
@@ -234,7 +226,7 @@ class TinychatRTMPClient:
                 self.is_connected = False
                 self.is_client_mod = False
                 self.room_users.clear()
-                self.id_and_nick.clear()  # NEW
+                self.id_and_nick.clear()
                 self.uptime = 0
                 self.connection.shutdown()
             except Exception as e:
@@ -257,17 +249,7 @@ class TinychatRTMPClient:
         failures = 0
         t = time.time()
         while self.is_connected:
-            # TODO: This uptime stuff should be moved to it's own function.
-            elapsed = time.time() - t
-            m, s = divmod(elapsed, 60)
-            h, m = divmod(m, 60)
-            d, h = divmod(h, 24)
-            if d == 0:
-                self.uptime = '%d:%02d:%02d' % (h, m, s)
-            if d == 0 and h == 0:
-                self.uptime = '%02d:%02d' % (m, s)
-            else:
-                self.uptime = '%d Day(s) %d:%02d:%02d' % (d, h, m, s)
+            self.uptime = time.time() - t
             try:
                 amf0_data = self.connection.reader.next()
                 # amf0_data_format = self.amf0_data['msg']
@@ -279,11 +261,11 @@ class TinychatRTMPClient:
             else:
                 failures = 0
             try:
+                iparam0 = 0
                 amf0_cmd = amf0_data['command']
                 cmd = amf0_cmd[0]
-                iparam0 = 0
                 # Looking in the SWF file, there seems to be more commands,
-                # these haven't been included here as i don't know if they are still active...
+                # they haven't been included here as i don't think they are still active...
                 if cmd == '_result':
                     print(amf0_data)
 
@@ -382,6 +364,7 @@ class TinychatRTMPClient:
                             iparam0 += 2
 
                 elif cmd == 'startbanlist':
+                    # print(amf0_data)
                     pass
 
                 elif cmd == 'topic':
@@ -393,8 +376,7 @@ class TinychatRTMPClient:
                     self.on_from_owner(owner_msg)
 
                 elif cmd == 'privmsg':
-                    msg_text = self._decode_msg(amf0_cmd[4])
-                    # msg_color = amf0_cmd[5]
+                    msg_text = self._decode_msg(u'' + amf0_cmd[4])
                     msg_sender = amf0_cmd[6]
                     self.on_privmsg(msg_text, msg_sender)
 
@@ -408,7 +390,7 @@ class TinychatRTMPClient:
                         self.on_pro(notice_msg_id)
 
                 elif cmd == 'gift':
-                    # Not exactly sure what this is about..
+                    # ?
                     print(amf0_data)
 
                 elif cmd == 'giftpoints':
@@ -423,7 +405,8 @@ class TinychatRTMPClient:
                         if account_name == '$noinfo':
                             self.user_is_guest(uid)
                         else:
-                            self.user_has_account(uid, account_name)
+                            thread.start_new_thread(self.user_has_account,(uid, account_name,))
+                            # self.user_has_account(uid, account_name)
 
                 else:
                     console_write([COLOR['bright_red'], 'Unknown command:' + cmd, self.roomname])
@@ -450,7 +433,7 @@ class TinychatRTMPClient:
         console_write([COLOR['bright_green'], 'registered with ID: ' + self.client_id + '. Trying to parse captcha key.', self.roomname])
         key = tinychat_api.get_captcha_key(self.roomname, self.client_id, proxy=self.proxy)
         if key is None:
-            console_write([COLOR['bright_red'], 'There was a problem parsing the captcha key. Key=' + key, self.roomname])
+            console_write([COLOR['bright_red'], 'There was a problem parsing the captcha key. Key=' + str(key), self.roomname])
         else:
             console_write([COLOR['bright_green'], 'Captcha key found: ' + key, self.roomname])
             self.send_cauth_msg(key)
@@ -462,20 +445,20 @@ class TinychatRTMPClient:
     def on_join(self, uid, nick):
         user = self.add_user_info(nick)
         user.id = uid
-        self.id_and_nick[uid] = nick  # NEW
+        self.id_and_nick[uid] = nick
         if uid != self.client_id:
             console_write([COLOR['bright_cyan'], nick + ':' + uid + ' joined the room.', self.roomname])
-            self.send_userinfo_request_msg(uid)  # NEW
+            self.send_userinfo_request_msg(uid)
 
     def on_joins(self, uid, nick):
         user = self.add_user_info(nick)
         user.id = uid
         if uid != self.client_id:
             console_write([COLOR['bright_green'], nick + ':' + uid, self.roomname])
-            self.id_and_nick[uid] = nick  # NEW
+            self.id_and_nick[uid] = nick
 
     def on_joinsdone(self):
-        thread.start_new_thread(self.send_userinfo_request_to_all, ())  # NEW
+        thread.start_new_thread(self.send_userinfo_request_to_all, ())
 
     def on_oper(self, uid, nick):
         user = self.add_user_info(nick)
@@ -484,6 +467,8 @@ class TinychatRTMPClient:
             console_write([COLOR['bright_red'], nick + ':' + uid + ' is moderator.', self.roomname])
 
     def on_deop(self, uid, nick):
+        user = self.add_user_info(nick)
+        user.is_mod = False
         console_write([COLOR['red'], nick + ':' + uid + ' was deoped.', self.roomname])
 
     def on_owner(self):
@@ -501,9 +486,9 @@ class TinychatRTMPClient:
         old_info.nick = new
         if old in self.room_users.keys():
             del self.room_users[old]
-            del self.id_and_nick[uid]  # NEW
+            del self.id_and_nick[uid]
             self.room_users[new] = old_info
-            self.id_and_nick[uid] = new  # NEW
+            self.id_and_nick[uid] = new
         if uid != self.client_id:
             console_write([COLOR['cyan'], old + ':' + uid + ' changed nick to: ' + new, self.roomname])
 
@@ -512,7 +497,7 @@ class TinychatRTMPClient:
 
     def on_quit(self, uid, name):
         del self.room_users[name]
-        del self.id_and_nick[uid]  # NEW
+        del self.id_and_nick[uid]
         console_write([COLOR['cyan'], name + ':' + uid + ' left the room.', self.roomname])
 
     def on_kick(self, uid, name):
@@ -541,7 +526,7 @@ class TinychatRTMPClient:
         """
         Message controller.
 
-        This method will figure out if the message is a media playing/stoping or if it's a private message.
+        Figures out if the message is a media playing/stoping or if it's a private message.
         If it's not, we pass the message along to message_handler.
         :param msg: str message.
         :param msg_sender: str the sender of the message.
@@ -553,21 +538,31 @@ class TinychatRTMPClient:
                 self.private_message_handler(msg_sender, private_msg)
 
             elif msg_cmd[0] == '/mbs':
-                self.user_is_playing_media(msg_cmd[1], msg_sender, msg_cmd[2])
+                media_type = msg_cmd[1]
+                media_id = msg_cmd[2]
+                thread.start_new_thread(self.user_is_playing_media, (media_type, media_id, msg_sender,))
+                # self.user_is_playing_media(media_type, media_id, msg_sender)
 
             elif msg_cmd[0] == '/mbc':
-                self.user_closed_media(msg_cmd[1], msg_sender)
+                media_type = msg_cmd[1]
+                self.user_closed_media(media_type, msg_sender)
 
-            elif msg_cmd[0] == 'mbpa':
+            elif msg_cmd[0] == '/mbpa':
+                # media_type = msg_cmd[1]
+                # self.user_paused_media(media_type, msg_sender)
                 pass
 
             elif msg_cmd[0] == '/mbpl':
+                # media_type = msg_cmd[1]
+                # self.user_resumed_media(media_type, msg_sender)
                 pass
 
             elif msg_cmd[0] == '/mbsk':
+                # media_type = msg_cmd[1]
+                # self.user_time_searched_media(media_type, msg_sender)
                 pass
         else:
-            self.message_handler(msg_sender, msg.encode('ascii', 'ignore'))
+            self.message_handler(msg_sender, msg)
 
     # Message Handler.
     def message_handler(self, msg_sender, msg):
@@ -588,7 +583,7 @@ class TinychatRTMPClient:
         console_write([COLOR['white'], 'Private message from ' + msg_sender + ':' + private_msg, self.roomname])
 
     # Media Events.
-    def user_is_playing_media(self, media_type, usr_nick, video_id):
+    def user_is_playing_media(self, media_type, video_id, usr_nick):
         """
         A user started a media broadcast.
         :param media_type: str the type of media. youTube or soundCloud.
@@ -606,7 +601,7 @@ class TinychatRTMPClient:
         console_write([COLOR['bright_magenta'], usr_nick + ' closed the ' + media_type, self.roomname])
 
     # User Info Events
-    def user_is_guest(self, uid):  # NEW
+    def user_is_guest(self, uid):
         """
         The user tells us that they are a guest.
         :param uid: str the user ID of the guest user.
@@ -615,7 +610,7 @@ class TinychatRTMPClient:
         user.account = False
         console_write([COLOR['bright_yellow'], str(self.id_and_nick[uid]) + ' is not signed in.', self.roomname])
 
-    def user_has_account(self, uid, usr_acc):  # NEW
+    def user_has_account(self, uid, usr_acc):
         """
         A user replies to our user info request, that they have a account name.
         We look up the account using tinychat's API and add the info to the user object.
@@ -625,6 +620,9 @@ class TinychatRTMPClient:
         """
         user = self.add_user_info(self.id_and_nick[uid])
         user.user_account = usr_acc
+        if usr_acc == self.roomname:
+            user.is_owner = True
+
         console_write([COLOR['bright_yellow'], str(self.id_and_nick[uid]) + ' has account: ' + usr_acc, self.roomname])
         tc_info = tinychat_api.tinychat_user_info(usr_acc)
         if tc_info is not None:
@@ -724,7 +722,7 @@ class TinychatRTMPClient:
             self._sendCommand('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg), u'' + random_color() + ',en', u'n' + user.id + '-' + nick])
             self._sendCommand('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg), u'' + random_color() + ',en', u'b' + user.id + '-' + nick])
 
-    def send_userinfo_request_msg(self, user_id):  # NEW
+    def send_userinfo_request_msg(self, user_id):
         """
         Send user info request to a user.
         :param user_id: str user id of the user we want info from.
@@ -736,7 +734,7 @@ class TinychatRTMPClient:
         """
         Request userinfo from all users.
         Only used when we join a room.
-        NOTE: This method MUST be started in a new thread!
+        NOTE: Start in new thread.
         """
         for user_id in self.id_and_nick.keys():
             self.send_userinfo_request_msg(user_id)
@@ -890,7 +888,7 @@ class TinychatRTMPClient:
         chars = msg.split(',')
         msg = ''
         for i in chars:
-            msg += chr(int(i))
+            msg += unichr(int(i))
         return msg
 
     def _encode_msg(self, msg):

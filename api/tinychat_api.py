@@ -83,18 +83,19 @@ def spy_info(room):
     else:
         try:
             json_data = web_request.get_request(url, json=True)
-            mod_count = json_data['content']['mod_count']
-            broadcaster_count = json_data['content']['broadcaster_count']
-            total_count = int(json_data['content']['total_count'])
+            mod_count = str(json_data['content']['mod_count'])
+            broadcaster_count = str(json_data['content']['broadcaster_count'])
+            total_count = json_data['content']['total_count']
             if total_count > 0:
                 users = json_data['content']['names']
                 return {'mod_count': mod_count, 'broadcaster_count': broadcaster_count,
-                        'total_count': total_count, 'users': users}
+                        'total_count': str(total_count), 'users': users}
         except (IndexError, KeyError):
             return None
 
 
 def get_bauth_token(roomname, nick, uid, greenroom, proxy=None):
+    #  A token IS present even if password is enabled, will it work? needs more testing..
     """
     Find the bauth token needed before we can start a broadcast.
     :param roomname: str the room name.
@@ -119,6 +120,7 @@ def get_bauth_token(roomname, nick, uid, greenroom, proxy=None):
     else:
         token = root.getAttribute('token')
         return token
+
 
 def get_captcha_key(roomname, uid, proxy=None):
     """
@@ -161,7 +163,7 @@ def recaptcha(proxy=None):
     Check if we have to solve a captcha before we can connect.
     If yes, then it will open in the default browser.
     :param proxy: str use a proxy for this request.
-    :return: dict{'cookies'} this NOT used in the code , but are left here for debugging purpose.
+    :return: dict{'cookies'} this is NOT used in the code , but are left here for debugging purpose.
     """
     t = str(random.uniform(0.9, 0.10))
     url = 'http://tinychat.com/cauth/captcha?%s' % t
