@@ -261,9 +261,9 @@ class TinychatRTMPClient:
             else:
                 failures = 0
             try:
-                iparam0 = 0
                 amf0_cmd = amf0_data['command']
                 cmd = amf0_cmd[0]
+                iparam0 = 0
                 # Looking in the SWF file, there seems to be more commands,
                 # they haven't been included here as i don't think they are still active...
                 if cmd == '_result':
@@ -377,6 +377,8 @@ class TinychatRTMPClient:
 
                 elif cmd == 'privmsg':
                     msg_text = self._decode_msg(u'' + amf0_cmd[4])
+                    # msg_text = self._decode_msg(amf0_cmd[4])
+                    # msg_color = amf0_cmd[5]
                     msg_sender = amf0_cmd[6]
                     self.on_privmsg(msg_text, msg_sender)
 
@@ -548,11 +550,8 @@ class TinychatRTMPClient:
                 self.user_closed_media(media_type, msg_sender)
 
             elif msg_cmd[0] == '/mbpa':
-<<<<<<< HEAD
                 # media_type = msg_cmd[1]
                 # self.user_paused_media(media_type, msg_sender)
-=======
->>>>>>> origin/master
                 pass
 
             elif msg_cmd[0] == '/mbpl':
