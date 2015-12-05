@@ -548,8 +548,11 @@ class TinychatRTMPClient:
                 self.user_closed_media(media_type, msg_sender)
 
             elif msg_cmd[0] == '/mbpa':
+<<<<<<< HEAD
                 # media_type = msg_cmd[1]
                 # self.user_paused_media(media_type, msg_sender)
+=======
+>>>>>>> origin/master
                 pass
 
             elif msg_cmd[0] == '/mbpl':
