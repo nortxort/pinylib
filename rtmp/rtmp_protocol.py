@@ -578,7 +578,8 @@ class FlashSharedObject:
 class RtmpClient:
     """ Represents an RTMP client. """
 
-    def __init__(self, ip, port, tc_url, page_url, swf_url, app, proxy=None, swf_version='WIN 19,0,0,226'):
+    def __init__(self, ip, port, tc_url, page_url, swf_url, app,
+                 room_type, prefix, room, version, cookie, account='', proxy=None,):
         """ Initialize a new RTMP client. """
         self.ip = ip
         self.port = port
@@ -586,9 +587,15 @@ class RtmpClient:
         self.page_url = page_url
         self.swf_url = swf_url
         self.app = app
-        self.proxy = proxy
-        self.swf_version = swf_version
+        self.swf_version = 'WIN 19,0,0,245'
         self.shared_objects = []
+        self.room_type = room_type
+        self.prefix = prefix
+        self.room_name = room
+        self.version = version
+        self.cookie = cookie
+        self.account = account
+        self.proxy = proxy
 
         # superDebugNotice("rtmp client __init__")
         # superDebug("ip", self.ip)
@@ -646,7 +653,7 @@ class RtmpClient:
                 1,
                 {
                     'videoCodecs': 252,
-                    'audioCodecs': 3191,
+                    'audioCodecs': 3575,
                     'flashVer': u'' + self.swf_version,
                     'app': self.app,
                     'tcUrl': self.tc_url,
@@ -656,6 +663,14 @@ class RtmpClient:
                     'fpad': False,
                     'swfUrl': self.swf_url,
                     'objectEncoding': 0
+                },
+                {
+                    'account': u'' + self.account,  # tinychat login account
+                    'type': u'' + self.room_type,   # 'show' if its a registered room else 'default'
+                    'prefix': u'' + self.prefix,    # 'tinychat' or 'greenroom'.
+                    'room': u'' + self.room_name,   # name of the room
+                    'version': u'' + self.version,  # desktop version
+                    'cookie': u'' + self.cookie     # cauth cookie
                 }
             ]
         }
