@@ -13,6 +13,20 @@ def new_session():
     _request_session = requests.session()
 
 
+def delete_login_cookies():
+    """
+    Delete tinychat login cookies, thereby login us out.
+    :return: True if logged in else False
+    """
+    if 'pass' in _request_session.cookies:
+        _request_session.cookies['pass'] = None
+        _request_session.cookies['hash'] = None
+        _request_session.cookies['user'] = None
+        _request_session.cookies['tcuid'] = None
+        return True
+    return False
+
+
 def get_request(url, json=False, proxy=None):
     """
     All functions/methods using GET will use this function.
@@ -27,7 +41,7 @@ def get_request(url, json=False, proxy=None):
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
-            'Referer': 'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0645.swf?version=1.0.0.0645'
+            'Referer': 'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0650.swf?version=1.0.0.0650'
         }
 
     if proxy:
