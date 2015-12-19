@@ -33,7 +33,7 @@ def eightball():
 
 
 class TinychatBot(tinychat.TinychatRTMPClient):
-    """ Overrides event methods in TinychatRTMPClient that client should to react to. """
+    """ Overrides event methods in TinychatRTMPClient that the client should to react to. """
     key = OPTIONS['key']
     no_cam = False
     no_guests = False
@@ -43,13 +43,53 @@ class TinychatBot(tinychat.TinychatRTMPClient):
     search_list = []
     inowplay = 0
     play = True
+    auto_play = True  # NEW
+    allow_overplay = True  # NEW NOT IMPLEMENTED YET!
     user_obj = object
+
+    def on_join(self, join_info_dict):
+        user = self.add_user_info(join_info_dict['nick'])
+        user.nick = join_info_dict['nick']
+        user.user_account = join_info_dict['account']
+        user.id = join_info_dict['id']
+        user.is_mod = join_info_dict['mod']
+        user.is_owner = join_info_dict['own']
+
+        if join_info_dict['account']:
+            tc_info = tinychat.tinychat_api.tinychat_user_info(join_info_dict['account'])
+            if tc_info is not None:
+                user.tinychat_id = tc_info['tinychat_id']
+                user.last_login = tc_info['last_active']
+            if join_info_dict['own']:
+                tinychat.console_write([tinychat.COLOR['red'], 'Room Owner ' + join_info_dict['nick'] +
+                                        ':' + str(join_info_dict['id']) + ':' + join_info_dict['account'],
+                                        self.roomname])
+            elif join_info_dict['mod']:
+                tinychat.console_write([tinychat.COLOR['bright_red'], 'Moderator ' + join_info_dict['nick'] +
+                                        ':' + str(join_info_dict['id']) + ':' + join_info_dict['account'],
+                                        self.roomname])
+            else:
+                tinychat.console_write([tinychat.COLOR['bright_yellow'], join_info_dict['nick'] +
+                                        ':' + str(join_info_dict['id']) + ' Has account: ' + join_info_dict['account'],
+                                        self.roomname])
+
+                badaccounts = tinychat.fh.file_reader(OPTIONS['path'], OPTIONS['badaccounts'])
+                if badaccounts is not None:
+                    if join_info_dict['account'] in badaccounts:
+                        if self.is_client_mod:
+                            self.send_ban_msg(join_info_dict['nick'], join_info_dict['id'])
+                            self.send_forgive_msg(join_info_dict['id'])
+        else:
+            if join_info_dict['id'] is not self.client_id:
+                tinychat.console_write([tinychat.COLOR['bright_cyan'], join_info_dict['nick'] +
+                                        ':' + str(join_info_dict['id']) + ' joined the room.', self.roomname])
 
     def on_joinsdone(self):
         if not self.is_reconnected:
             if OPTIONS['auto_message_enabled']:
                 thread.start_new_thread(self.start_auto_msg_sender, ())
-        thread.start_new_thread(self.send_userinfo_request_to_all, ())
+        if self.is_client_mod:
+            self.send_banlist_msg()
 
     def on_avon(self, uid, name):
         if self.no_cam:
@@ -62,79 +102,97 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         old_info.nick = new
         if old in self.room_users.keys():
             del self.room_users[old]
-            del self.id_and_nick[uid]
-            # Update user info
             self.room_users[new] = old_info
-            self.id_and_nick[uid] = new
-        # Is it a new user joining?
-        if str(old).startswith('guest-') and uid != self.client_id:
-            bad_nicks = tinychat.fh.file_reader(OPTIONS['path'], OPTIONS['badnicks'])
-            # Check if the user name is in the badnicks file.
-            if bad_nicks is not None and new in bad_nicks:
-                # User name is in the badnicks file, ban the user.
-                self.send_ban_msg(new, uid)
-            else:
-                user = self.find_user_info(new)
-                if user.user_account is not None:
-                    # If user is signed in, greet with account name.
-                    self.send_bot_msg('*Welcome to* ' + self.roomname + ' *' + new + '*:' + user.user_account,
-                                      self.is_client_mod)
+
+        if str(old).startswith('guest-'):
+            if self.client_id != uid:
+                bn = tinychat.fh.file_reader(OPTIONS['path'], OPTIONS['badnicks'])
+                if bn is not None and new in bn:
+                    if self.is_client_mod:
+                        self.send_ban_msg(new, uid)
+                        # forgive?
                 else:
-                    # Else just greet user.
-                    self.send_bot_msg('*Welcome to* ' + self.roomname + ' *' + new + '*', self.is_client_mod)
-                # Is media playing?
-                if len(self.playlist) is not 0:
-                    play_type = self.playlist[self.inowplay]['type']
-                    video_id = self.playlist[self.inowplay]['video_id']
-                    elapsed_time = str(self.elapsed_track_time)
-                    # Play the media at the correct start time.
-                    self.send_undercover_msg(new, '/mbs ' + play_type + ' ' + video_id + ' ' + elapsed_time)
+                    user = self.find_user_info(new)
+                    if user is not None:
+                        if user.user_account:
+                            self.send_bot_msg('*Welcome to* ' + self.roomname + ' *' + new + '*:' + user.user_account,
+                                              self.is_client_mod)
+                        else:
+                            self.send_bot_msg('*Welcome to* ' + self.roomname + ' *' + new + '*', self.is_client_mod)
 
-        tinychat.console_write([tinychat.COLOR['cyan'], old + ':' + uid + ' changed nick to: ' + new, self.roomname])
+                    if len(self.playlist) is not 0:
+                        play_type = self.playlist[self.inowplay]['type']
 
-    # User Info Events
-    def user_is_guest(self, uid):
+                        video_id = self.playlist[self.inowplay]['video_id']
+                        elapsed_time = str(self.elapsed_track_time)
+                        # Play the media at the correct start time.
+                        self.send_undercover_msg(new, '/mbs ' + play_type + ' ' + video_id + ' ' + elapsed_time)
+
+        tinychat.console_write([tinychat.COLOR['cyan'], old + ':' + str(uid) + ' changed nick to: ' + new, self.roomname])
+
+    # Media Events.
+    def media_broadcast_start(self, media_type, video_id, usr_nick):
+        if self.auto_play:
+            self.auto_play = False
+        self.play = False
+
+        video_time = 0
+
+        if media_type == 'youTube':
+            _youtube = youtube.youtube_time(video_id, check=False)
+            if _youtube is not None:
+                video_time = _youtube['video_time']
+
+        elif media_type == 'soundCloud':
+            _soundcloud = soundcloud.soundcloud_track_info(video_id)
+            if _soundcloud is not None:
+                video_time = _soundcloud['video_time']
+
+        self.auto_play = True
+        self.play = True
+        # self.send_bot_msg('*Tracking: ' + media_type + ' @' + self.to_human_time(video_time) + '*', self.is_client_mod)
+
+        tinychat.console_write([tinychat.COLOR['bright_magenta'], usr_nick + ' is playing ' +
+                                media_type + ' ' + video_id, self.roomname])
+        self.media_timer(video_time)
+
+    def media_broadcast_close(self, media_type, usr_nick):
         """
-        The user tells us that they are a guest.
-        :param uid: str the user ID of the guest user.
+        A user closed a media broadcast.
+        :param media_type: str the type of media. youTube or soundCloud.
+        :param usr_nick: str the user name of the user closing the media.
         """
-        if self.no_guests and self.is_client_mod:
-            # Kick users not signed in.
-            self.send_ban_msg(str(self.id_and_nick[uid]), str(uid))
-            self.send_forgive_msg(uid)
-        else:
-            user = self.add_user_info(self.id_and_nick[uid])
-            user.account = False
-        tinychat.console_write([tinychat.COLOR['bright_yellow'], str(self.id_and_nick[uid]) + ' is not signed in.',
-                                self.roomname])
+        tinychat.console_write([tinychat.COLOR['bright_magenta'], usr_nick + ' closed the ' +
+                                media_type, self.roomname])
 
-    def user_has_account(self, uid, usr_acc):
+    def media_broadcast_paused(self, media_type, usr_nick):
         """
-        A user replies to our user info request, that they have a account name.
-        We look up the account using tinychat's API and add the info to the user object.
-
-        :param uid: str the user ID of the user having an account.
-        :param usr_acc: str the account that the user has.
+        A user paused the media broadcast.
+        :param media_type: str the type of media being paused. youTube or soundCloud.
+        :param usr_nick: str the user name of the user pausing the media.
         """
-        user = self.add_user_info(self.id_and_nick[uid])
-        badaccounts = tinychat.fh.file_reader(OPTIONS['path'], OPTIONS['badaccounts'])
-        if badaccounts is not None and usr_acc in badaccounts:
-            if self.is_client_mod:
-                self.send_ban_msg(user.nick, uid)
-                # Remove next line to ban.
-                self.send_forgive_msg(uid)
-        else:
-            user.user_account = usr_acc
-            if usr_acc == self.roomname:
-                user.is_owner = True
+        tinychat.console_write([tinychat.COLOR['bright_magenta'], usr_nick + ' paused the ' +
+                                media_type, self.roomname])
 
-            tc_info = tinychat.tinychat_api.tinychat_user_info(usr_acc)
-            if tc_info is not None:
-                user.tinychat_id = tc_info['tinychat_id']
-                user.last_login = tc_info['last_active']
+    def media_broadcast_resumed(self, media_type, time_point, usr_nick):
+        """
+        A user resumed playing a media broadcast.
+        :param media_type: str the media type. youTube or soundCloud.
+        :param time_point: int the time point in the tune in milliseconds.
+        :param usr_nick: str the user resuming the tune.
+        """
+        tinychat.console_write([tinychat.COLOR['bright_magenta'], usr_nick + ' resumed the ' +
+                                media_type + ' at: ' + self.to_human_time(time_point), self.roomname])
 
-            tinychat.console_write([tinychat.COLOR['bright_yellow'], str(self.id_and_nick[uid]) +
-                                    ' has account: ' + usr_acc, self.roomname])
+    def media_broadcast_skip(self, media_type, time_point, usr_nick):
+        """
+        A user time searched a tune.
+        :param media_type: str the media type. youTube or soundCloud.
+        :param time_point: int the time point in the tune in milliseconds.
+        :param usr_nick: str the user time searching the tune.
+        """
+        tinychat.console_write([tinychat.COLOR['bright_magenta'], usr_nick + ' time searched the ' +
+                                media_type + ' at: ' + self.to_human_time(time_point), self.roomname])
 
     def message_handler(self, msg_sender, msg):
         """
@@ -172,12 +230,6 @@ class TinychatBot(tinychat.TinychatRTMPClient):
 
             elif cmd == OPTIONS['prefix'] + 'skip':
                 self.do_skip()
-
-            elif cmd == OPTIONS['prefix'] + 'up':
-                self.do_up()
-                
-            elif cmd == OPTIONS['prefix'] + 'down':
-                self.do_down()
 
             elif cmd == OPTIONS['prefix'] + 'nick':
                 self.do_nick(cmd_arg)
@@ -343,18 +395,6 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
             if len(self.playlist) is not 0:
                 self.play = False
-
-    def do_up(self):
-        """ Makes the bot camup. """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
-            self.send_bauth_msg()
-            self._sendCreateStream()
-            self._sendPublish()
-
-    def do_down(self):
-        """ Makes the bot cam down. """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
-            self._sendCloseStream()
 
     def do_nick(self, new_nick):
         """
@@ -666,7 +706,14 @@ class TinychatBot(tinychat.TinychatRTMPClient):
 
     def do_help(self):
         """ Posts a link to github readme/wiki or other page about the bot commands. """
-        self.send_bot_msg('https://github.com/nortxort/pinylib/wiki/commands', self.is_client_mod)
+        if self.user_obj.is_owner:
+            self.send_undercover_msg(self.user_obj.nick, '*Commands:* https://github.com/nortxort/pinylib/wiki/commands')
+        elif self.user_obj.is_mod or self.user_obj.has_power:
+            self.send_undercover_msg(self.user_obj.nick, '*Commands:* https://github.com/nortxort/pinylib/wiki/' +
+                                     'Commands#moderator-and-bot-controller-commands')
+        else:
+            self.send_undercover_msg(self.user_obj.nick, '*Commands:* https://github.com/nortxort/pinylib/wiki/ ' +
+                                     'Commands#public-commands')
 
     def do_plugin(self):
         """ Posts a link to the tinychat modified "flash game maximizer" firefox plugin. """
@@ -985,6 +1032,12 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             elif pm_cmd == OPTIONS['prefix'] + 'deop':
                 self.do_deop_user(msg_sender, pm_parts)
 
+            elif pm_cmd == OPTIONS['prefix'] + 'up':
+                self.do_cam_up(pm_arg)
+
+            elif pm_cmd == OPTIONS['prefix'] + 'down':
+                self.do_cam_down(pm_arg)
+
             elif pm_cmd == OPTIONS['prefix'] + 'nocam':
                 self.do_nocam(msg_sender, pm_arg)
 
@@ -1052,6 +1105,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 if user is not None:
                     user.has_power = True
                     self.send_private_bot_msg(user.nick + ' is now a bot controller.', msg_sender)
+                    # Alert the user that he/she is now a bot controller?
+                    # self.send_private_bot_msg('You are now a bot controller.', user.nick)
                 else:
                     self.send_private_bot_msg('No user named: ' + msg_parts[1], msg_sender)
 
@@ -1104,6 +1159,40 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                         self.send_private_bot_msg('No user named: ' + msg_parts[1], msg_sender)
                 else:
                     self.send_private_bot_msg('Wrong key.', msg_sender)
+
+    def do_cam_up(self, key):
+        """
+        Makes the bot camup.
+        :param key str the key needed for moderators/bot controllers.
+        """
+        if self.user_obj.is_owner:
+            self.send_bauth_msg()
+            self._sendCreateStream()
+            self._sendPublish()
+        elif self.user_obj.is_mod or self.user_obj.has_power:
+            if len(key) is 0:
+                self.send_private_bot_msg('Missing key.', self.user_obj.nick)
+            elif key == self.key:
+                self.send_bauth_msg()
+                self._sendCreateStream()
+                self._sendPublish()
+            else:
+                self.send_private_bot_msg('Wrong key.', self.user_obj.nick)
+
+    def do_cam_down(self, key):
+        """
+        Makes the bot cam down.
+        :param key: str the key needed for moderators/bot controllers.
+        """
+        if self.user_obj.is_owner:
+            self._sendCloseStream()
+        elif self.user_obj.is_mod or self.user_obj.has_power:
+            if len(key) is 0:
+                self.send_private_bot_msg('Missing key.', self.user_obj.nick)
+            elif key == self.key:
+                self._sendCloseStream()
+            else:
+                self.send_private_bot_msg('Wrong key.', self.user_obj.nick)
 
     def do_nocam(self, msg_sender, key):
         """
@@ -1176,7 +1265,9 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param msg_sender: str the message sender.
         :param key: str the secret key.
         """
-        if key == self.key:
+        if len(key) is 0:
+            self.send_private_bot_msg('Missing key.', msg_sender)
+        elif key == self.key:
             self.user_obj.has_power = True
             self.send_private_bot_msg('You are now a bot controller.', msg_sender)
         else:
@@ -1192,7 +1283,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             self.send_private_bot_msg('Missing username.', msg_sender)
         elif len(pm_parts) == 2:
             self.send_private_bot_msg('The command is: !pm username message', msg_sender)
-        elif len(pm_parts) == 3:
+        elif len(pm_parts) >= 3:
             pm_to = pm_parts[1]
             msg = ' '.join(pm_parts[2:])
             is_user = self.find_user_info(pm_to)
@@ -1220,11 +1311,10 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     self.play_soundcloud(self.playlist[self.inowplay]['video_id'])
             self.media_timer(self.playlist[self.inowplay]['video_time'])
 
-    def media_timer(self, video_time, auto_play=True):
+    def media_timer(self, video_time):  # EDITED
         """
         Method to time media being played.
         :param video_time: int milliseconds.
-        :param auto_play: bool True = play from playlist.
         """
         ts_now = int(tinychat.time.time() * 1000)
         while self.play:
@@ -1232,19 +1322,30 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             self.elapsed_track_time = track_timer - ts_now
             self.remaining_track_time = video_time - self.elapsed_track_time
             if track_timer == ts_now + video_time:
-                if auto_play:
+                if self.auto_play:
                     self.inowplay += 1
                     self.start_playlist()
                     break
                 else:
-                    # setting auto_play to False while a playlist is playing,
-                    # will prevent next tune in the playlist from being played.
+                    # setting auto_play to False before or after a tune is started,
+                    # will prevent the next tune in the playlist from being played.
+
+                    # re enable auto play.
+                    self.auto_play = True
                     break
         if self.play is False:
-            if auto_play:
+            if self.auto_play:
                 self.inowplay += 1
                 self.play = True
                 self.start_playlist()
+            else:
+                # setting auto_play to False and then setting play to False,
+                # will end the media timer loop.
+
+                # re enable auto play.
+                self.auto_play = True
+                # re enable the media timer.
+                self.play = True
 
     def random_msg(self):
         """
