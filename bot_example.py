@@ -338,7 +338,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
 
             # Tinychat API commands.
             elif cmd == OPTIONS['prefix'] + 'spy':
-                threading.Thread(target=self.do_spy, args=(cmd_arg,)).start()
+                threading.Thread(target=self.do_spy, args=(msg_sender, cmd_arg,)).start()
 
             elif cmd == OPTIONS['prefix'] + 'acspy':  # usrspy -> acspy
                 threading.Thread(target=self.do_account_spy, args=(msg_sender, cmd_arg, )).start()
