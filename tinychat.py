@@ -197,11 +197,6 @@ class TinychatRTMPClient:
             try:
                 tinychat_api.recaptcha(proxy=self.proxy)
                 cauth_cookie = tinychat_api.get_cauth_cookie(self.roomname, proxy=self.proxy)
-<<<<<<< HEAD
-=======
-                # if self.greenroom:
-                #    self.prefix = u'greenroom'
->>>>>>> origin/master
                 self.connection = rtmp_protocol.RtmpClient(self.ip, self.port, self.tc_url, self.embed_url,
                                                            self.swf_url, self.app, self.roomtype, self.prefix,
                                                            self.roomname, self.desktop_version, cauth_cookie,
