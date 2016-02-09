@@ -113,6 +113,8 @@ def youtube_playlist_videos(playlist_id):
     :param playlist_id: str the playlist ID
     :return: list[ dict{'type=youTube', 'video_id', 'video_title', 'video_time'}] or None on failure.
     """
+    # key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg&playlistId=PLicWvCIV6DedrsSANN2_NifFlpiJm8FkM&maxResults=50&part=snippet,id&pageToken=CDIQAA
+
     playlist_details_url = 'https://www.googleapis.com/youtube/v3/playlistItems?' \
                            'key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg&playlistId=%s' \
                            '&maxResults=50&part=snippet,id' % playlist_id
@@ -120,6 +122,7 @@ def youtube_playlist_videos(playlist_id):
     api_response = web_request.get_request(playlist_details_url, json=True)
     if api_response['content'] is not None:
         video_list = []
+        # next_page_token = api_response['content']['nextPageToken']
         try:
             for item in api_response['content']['items']:
                 video_id = item['snippet']['resourceId']['videoId']
@@ -140,7 +143,7 @@ def youtube_time(video_id, check=True):
     Youtube helper function to get the video time for a given video id.
 
     Checks a youtube video id to see if the video is blocked or allowed in the following countries:
-    USA, DENMARK, POLAND, UNITED KINGDOM and CANADA. If a video is blocked in one of the countries, None is returned.
+    USA, DENMARK and POLAND. If a video is blocked in one of the countries, None is returned.
     If a video is NOT allowed in ONE of the countries, None is returned else the video time will be returned.
 
     :param check: bool True = checks region restriction. False = no check will be done
@@ -159,16 +162,16 @@ def youtube_time(video_id, check=True):
             if check:
                 if 'regionRestriction' in contentdetails:
                     if 'blocked' in contentdetails['regionRestriction']:
-                        if ('US' or 'DK' or 'PL' or 'UK' or 'CA') in contentdetails['regionRestriction']['blocked']:
+                        if ('US' or 'DK' or 'PL') in contentdetails['regionRestriction']['blocked']:
                             return None
                     if 'allowed' in contentdetails['regionRestriction']:
-                        if ('US' or 'DK' or 'PL' or 'UK' or 'CA') not in contentdetails['regionRestriction']['allowed']:
+                        if ('US' or 'DK' or 'PL') not in contentdetails['regionRestriction']['allowed']:
                             return None
 
             video_time = convert_to_millisecond(contentdetails['duration'])
             video_title = response['content']['items'][0]['snippet']['title'].encode('ascii', 'ignore')
 
-            return {'video_time': video_time, 'video_title': video_title}
+            return {'type': 'youTube', 'video_id': video_id, 'video_time': video_time, 'video_title': video_title}
         except KeyError:
             return None
 
