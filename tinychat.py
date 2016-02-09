@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import time
-import thread
+from threading import Thread
 import random
 import traceback
+
 from colorama import init, Fore, Style
 from api import web_request, tinychat_api
 from files import file_handler as fh
@@ -12,9 +13,12 @@ from rtmp import rtmp_protocol
 
 #  Basic settings.
 SETTINGS = {
-    'log': True,
+    'chat_logging': True,
     'debug_mode': True,
-    'log_path': 'files/logs/'
+    'console_colors': True,
+    'reconnect_delay': 60,
+    'auto_job_interval': 300,
+    'config_path': 'files/rooms/'
 }
 
 #  Console colors.
@@ -50,39 +54,16 @@ def create_random_string(min_length, max_length, upper=False):
     return ''.join((random.choice(junk) for i in xrange(randlength)))
 
 
-def console_write(info_list):
-    """
-    Writes to console.
-    :param info_list: list of info.
-    : info_list[0] = The console color.
-    : info_list[1] = The message to write.
-    : info_list[2] = The room name.
-    """
-    ts = time.strftime('%H:%M:%S')
-    info = COLOR['white'] + '[' + ts + ']' + Style.RESET_ALL + ' ' + info_list[0] + info_list[1]
-    try:
-        # Colorama doesn't handle none english characters very well..
-        print(info)
-    except UnicodeEncodeError:
-        pass
-
-    #  Is logging enabled?
-    if SETTINGS['log']:
-        to_log = '[' + ts + '] ' + info_list[1]
-        #  Pass the message and room name to write_to_log().
-        write_to_log(to_log, info_list[2])
-
-
 def write_to_log(msg, room_name):
     """
-    Writes to log.
+    Writes chat events to log.
     The room name is used to construct a log file name from.
     :param msg: str the message to write to the log.
     :param room_name: str the room name.
     """
     d = time.strftime('%Y-%m-%d')
     file_name = d + '_' + room_name + '.log'
-    fh.file_writer(SETTINGS['log_path'], file_name, msg.encode('ascii', 'ignore'))
+    fh.file_writer(SETTINGS['config_path'] + room_name + '/logs/', file_name, msg.encode('ascii', 'ignore'))
 
 
 def random_color():
@@ -130,37 +111,60 @@ class TinychatRTMPClient:
         self.proxy = proxy
         self.greenroom = False
         self.prefix = u'tinychat'
-        self.swf_url = u'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0650.swf?version=1.0.0.0650/[[DYNAMIC]]/8'
-        self.desktop_version = u'Desktop 1.0.0.0650'
+        self.swf_url = u'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0655.swf?version=1.0.0.0655/[[DYNAMIC]]/8'
+        self.desktop_version = u'Desktop 1.0.0.0655'
         self.embed_url = u'http://tinychat.com/' + self.roomname
         self.client_id = None
+        self.connection = None
         self.is_connected = False
         self.is_client_mod = False
         self.room_users = {}
+        self.user_obj = object
         self.is_reconnected = False
         self.uptime = 0
+        self.reconnect_delay = SETTINGS['reconnect_delay']
+
+    def console_write(self, color, message):  # MOVED/EDITED
+        """
+        Writes message to console.
+        :param color: the colorama color representation.
+        :param message: str the message to write.
+        """
+        ts = time.strftime('%H:%M:%S')
+        if SETTINGS['console_colors']:
+            msg = COLOR['white'] + '[' + ts + '] ' + Style.RESET_ALL + color + message
+        else:
+            msg = '[' + ts + '] ' + message
+        try:
+            print(msg)
+        except UnicodeEncodeError as ue:
+            if SETTINGS['debug_mode']:
+                print(ue.message)
+
+        if SETTINGS['chat_logging']:
+            write_to_log('[' + ts + '] ' + message, self.roomname)
 
     def prepare_connect(self):
         """ Gather necessary connection parameters before attempting to connect. """
         if self.account and self.password:
+            # delete old login cookies.
             web_request.delete_login_cookies()
             if len(self.account) > 3:
                 login = web_request.post_login(self.account, self.password)
                 if 'pass' in login['cookies']:
-                    console_write([COLOR['green'], 'Logged in as: ' + login['cookies']['user'], self.roomname])
+                    self.console_write(COLOR['green'], 'Logged in as: ' + login['cookies']['user'])
                 else:
-                    console_write([COLOR['red'], 'Log in Failed', self.roomname])
+                    self.console_write(COLOR['red'], 'Log in Failed')
                     self.account = raw_input('Enter account: (optional)')
                     if self.account:
                         self.password = raw_input('Enter password: ')
                     self.prepare_connect()
             else:
-                console_write([COLOR['red'], 'Account name is to short.', self.roomname])
+                self.console_write(COLOR['red'], 'Account name is to short.')
                 self.account = raw_input('Enter account: ')
                 self.password = raw_input('Enter password: ')
                 self.prepare_connect()
 
-        console_write([COLOR['white'], 'Parsing room config xml...', self.roomname])
         config = tinychat_api.get_roomconfig_xml(self.roomname, self.room_pass, proxy=self.proxy)
         while config == 'PW':
             self.room_pass = raw_input('The room is password protected. Enter room password: ')
@@ -175,7 +179,7 @@ class TinychatRTMPClient:
                 if config != 'PW':
                     break
                 else:
-                    console_write([COLOR['red'], 'Password Failed.', self.roomname])
+                    self.console_write(COLOR['red'], 'Password Failed.')
 
         self.ip = config['ip']
         self.port = config['port']
@@ -184,12 +188,7 @@ class TinychatRTMPClient:
         self.roomtype = config['roomtype']
         self.greenroom = config['greenroom']
 
-        console_write([COLOR['white'],
-                       'TC Url: ' + self.tc_url + '\n' +
-                       'Application: ' + self.app + '\n' +
-                       'Room type: ' + self.roomtype + '\n' +
-                       'Greenroom: ' + str(self.greenroom) + '\n\n' +
-                       '============ CONNECTING ============\n', self.roomname])
+        self.console_write(COLOR['white'], config['tcurl'] + '\n\n' + '============ CONNECTING ============\n')
         self.connect()
 
     def connect(self):
@@ -198,8 +197,6 @@ class TinychatRTMPClient:
             try:
                 tinychat_api.recaptcha(proxy=self.proxy)
                 cauth_cookie = tinychat_api.get_cauth_cookie(self.roomname, proxy=self.proxy)
-                if self.greenroom:
-                    self.prefix = u'greenroom'
                 self.connection = rtmp_protocol.RtmpClient(self.ip, self.port, self.tc_url, self.embed_url,
                                                            self.swf_url, self.app, self.roomtype, self.prefix,
                                                            self.roomname, self.desktop_version, cauth_cookie,
@@ -225,12 +222,19 @@ class TinychatRTMPClient:
                 if SETTINGS['debug_mode']:
                     traceback.print_exc()
 
-    def reconnect(self):
+    def reconnect(self):  # EDITED
         """ Reconnect to a room with the connection parameters already set. """
-        console_write([COLOR['bright_cyan'], '============ RECONNECTING IN 15 SECONDS ============', self.roomname])
+        reconnect_msg = '============ RECONNECTING IN ' + str(self.reconnect_delay) + ' SECONDS ============'
+        self.console_write(COLOR['bright_cyan'], reconnect_msg)
         self.is_reconnected = True
         self.disconnect()
-        time.sleep(15)
+        time.sleep(self.reconnect_delay)
+
+        # increase reconnect_delay after each reconnect.
+        self.reconnect_delay *= 2
+        if self.reconnect_delay > 3600:
+            self.reconnect_delay = SETTINGS['reconnect_delay']
+
         if self.account and self.password:
             self.prepare_connect()
         else:
@@ -275,7 +279,7 @@ class TinychatRTMPClient:
 
                 elif cmd == 'join':
                     usr_join_info_dict = amf0_cmd[3]
-                    thread.start_new_thread(self.on_join, (usr_join_info_dict, ))
+                    Thread(target=self.on_join, args=(usr_join_info_dict,)).start()
 
                 elif cmd == 'joins':
                     current_room_users_info_list = amf0_cmd[3:]
@@ -380,12 +384,10 @@ class TinychatRTMPClient:
                     elif notice_msg == 'pro':
                         self.on_pro(notice_msg_id)
 
-
-
                 else:
-                    console_write([COLOR['bright_red'], 'Unknown command:' + cmd, self.roomname])
+                    self.console_write(COLOR['bright_red'], 'Unknown command:' + cmd)
 
-            except Exception as e:
+            except Exception:
                 if SETTINGS['debug_mode']:
                     traceback.print_exc()
 
@@ -401,7 +403,7 @@ class TinychatRTMPClient:
 
     def on_bwdone(self):
         if not self.is_reconnected:
-            thread.start_new_thread(self.start_auto_job_timer, ())
+            Thread(target=self.start_auto_job_timer).start()
 
     def on_registered(self, client_info):
         self.client_id = client_info['id']
@@ -413,15 +415,13 @@ class TinychatRTMPClient:
         user.is_mod = self.is_client_mod
         # self.is_client_pro = client_info['pro']
 
-        console_write([COLOR['bright_green'], 'registered with ID: ' + str(self.client_id) +
-                       '. Trying to parse captcha key.', self.roomname])
+        self.console_write(COLOR['bright_green'], 'registered with ID: ' + str(self.client_id))
 
         key = tinychat_api.get_captcha_key(self.roomname, str(self.client_id), proxy=self.proxy)
         if key is None:
-            console_write([COLOR['bright_red'], 'There was a problem parsing the captcha key. Key=' +
-                           str(key), self.roomname])
+            self.console_write(COLOR['bright_red'], 'There was a problem parsing the captcha key. Key=' + str(key))
         else:
-            console_write([COLOR['bright_green'], 'Captcha key found: ' + key, self.roomname])
+            self.console_write(COLOR['bright_green'], 'Captcha key: ' + key)
             self.send_cauth_msg(key)
             self.set_nick()
 
@@ -439,18 +439,18 @@ class TinychatRTMPClient:
                 user.tinychat_id = tc_info['tinychat_id']
                 user.last_login = tc_info['last_active']
             if join_info_dict['own']:
-                console_write([COLOR['red'], 'Room Owner ' + join_info_dict['nick'] +
-                               ':' + str(join_info_dict['id']) + ':' + join_info_dict['account'], self.roomname])
+                self.console_write(COLOR['red'], 'Room Owner ' + join_info_dict['nick'] +
+                                   ':' + str(join_info_dict['id']) + ':' + join_info_dict['account'])
             elif join_info_dict['mod']:
-                console_write([COLOR['bright_red'], 'Moderator ' + join_info_dict['nick'] +
-                               ':' + str(join_info_dict['id']) + ':' + join_info_dict['account'], self.roomname])
+                self.console_write(COLOR['bright_red'], 'Moderator ' + join_info_dict['nick'] +
+                                   ':' + str(join_info_dict['id']) + ':' + join_info_dict['account'])
             else:
-                console_write([COLOR['bright_yellow'], join_info_dict['nick'] + ':' + str(join_info_dict['id']) +
-                               'Has account: ' + join_info_dict['account'], self.roomname])
+                self.console_write(COLOR['bright_yellow'], join_info_dict['nick'] + ':' + str(join_info_dict['id']) +
+                                   'Has account: ' + join_info_dict['account'])
         else:
             if join_info_dict['id'] is not self.client_id:
-                console_write([COLOR['bright_cyan'], join_info_dict['nick'] + ':' + str(join_info_dict['id']) +
-                               ' joined the room.', self.roomname])
+                self.console_write(COLOR['cyan'], join_info_dict['nick'] + ':' + str(join_info_dict['id']) +
+                                   ' joined the room.')
 
     def on_joins(self, joins_info_dict):
         user = self.add_user_info(joins_info_dict['nick'])
@@ -462,18 +462,18 @@ class TinychatRTMPClient:
 
         if joins_info_dict['account']:
             if joins_info_dict['own']:
-                console_write([COLOR['red'], 'Joins Room Owner ' + joins_info_dict['nick'] +
-                               ':' + str(joins_info_dict['id']) + ':' + joins_info_dict['account'], self.roomname])
+                self.console_write(COLOR['red'], 'Joins Room Owner ' + joins_info_dict['nick'] +
+                                   ':' + str(joins_info_dict['id']) + ':' + joins_info_dict['account'])
             elif joins_info_dict['mod']:
-                console_write([COLOR['bright_red'], 'Joins Moderator ' + joins_info_dict['nick'] +
-                               ':' + str(joins_info_dict['id']) + ':' + joins_info_dict['account'], self.roomname])
+                self.console_write(COLOR['bright_red'], 'Joins Moderator ' + joins_info_dict['nick'] +
+                                   ':' + str(joins_info_dict['id']) + ':' + joins_info_dict['account'])
             else:
-                console_write([COLOR['bright_yellow'], 'Joins: ' + joins_info_dict['nick'] +
-                               ':' + str(joins_info_dict['id']) + ':' + joins_info_dict['account'], self.roomname])
+                self.console_write(COLOR['bright_yellow'], 'Joins: ' + joins_info_dict['nick'] +
+                                   ':' + str(joins_info_dict['id']) + ':' + joins_info_dict['account'])
         else:
             if joins_info_dict['id'] is not self.client_id:
-                console_write([COLOR['bright_cyan'], 'Joins: ' + joins_info_dict['nick'] +
-                               ':' + str(joins_info_dict['id']), self.roomname])
+                self.console_write(COLOR['bright_cyan'], 'Joins: ' + joins_info_dict['nick'] +
+                                   ':' + str(joins_info_dict['id']))
 
     def on_joinsdone(self):
         if self.is_client_mod:
@@ -483,23 +483,21 @@ class TinychatRTMPClient:
         user = self.add_user_info(nick)
         user.is_mod = True
         if uid != self.client_id:
-            console_write([COLOR['bright_red'], nick + ':' + uid + ' is moderator.', self.roomname])
+            self.console_write(COLOR['bright_red'], nick + ':' + uid + ' is moderator.')
 
     def on_deop(self, uid, nick):
         user = self.add_user_info(nick)
         user.is_mod = False
-        console_write([COLOR['red'], nick + ':' + uid + ' was deoped.', self.roomname])
+        self.console_write(COLOR['red'], nick + ':' + uid + ' was deoped.')
 
     def on_owner(self):
-        # self.is_client_mod = True
-        # self.send_banlist_msg()
         pass
 
     def on_avon(self, uid, name):
-        console_write([COLOR['cyan'], name + ':' + uid + ' is broadcasting.', self.roomname])
+        self.console_write(COLOR['cyan'], name + ':' + uid + ' is broadcasting.')
 
     def on_pro(self, uid):
-        console_write([COLOR['cyan'], uid + ' is pro.', self.roomname])
+        self.console_write(COLOR['cyan'], uid + ' is pro.')
 
     def on_nick(self, old, new, uid):
         if uid != self.client_id:
@@ -508,76 +506,80 @@ class TinychatRTMPClient:
             if old in self.room_users.keys():
                 del self.room_users[old]
                 self.room_users[new] = old_info
-            console_write([COLOR['cyan'], old + ':' + str(uid) + ' changed nick to: ' + new, self.roomname])
+            self.console_write(COLOR['bright_cyan'], old + ':' + str(uid) + ' changed nick to: ' + new)
 
     def on_nickinuse(self):
-        self.nick_inuse()
+        self.client_nick += str(random.randint(0, 10))
+        self.console_write(COLOR['white'], 'Nick already taken. Changing nick to: ' + self.client_nick)
+        self.set_nick()
 
     def on_quit(self, uid, name):
         if name in self.room_users.keys():
             del self.room_users[name]
-        console_write([COLOR['cyan'], name + ':' + uid + ' left the room.', self.roomname])
+        self.console_write(COLOR['cyan'], name + ':' + uid + ' left the room.')
 
     def on_kick(self, uid, name):
-        console_write([COLOR['bright_red'], name + ':' + uid + ' was banned.', self.roomname])
+        self.console_write(COLOR['bright_red'], name + ':' + uid + ' was banned.')
         self.send_banlist_msg()
 
     def on_banned(self):
-        console_write([COLOR['red'], 'You are banned from this room.', self.roomname])
+        self.console_write(COLOR['red'], 'You are banned from this room.')
 
     def on_banlist(self, uid, nick):
-        console_write([COLOR['bright_red'], 'Banned user: ' + nick + ':' + uid, self.roomname])
+        self.console_write(COLOR['bright_red'], 'Banned user: ' + nick + ':' + uid)
 
     def on_topic(self, topic):
         topic_msg = topic.encode('utf-8', 'replace')
-        console_write([COLOR['cyan'], 'room topic: ' + topic_msg, self.roomname])
+        self.console_write(COLOR['cyan'], 'room topic: ' + topic_msg)
 
     def on_from_owner(self, owner_msg):
         msg = str(owner_msg).replace('notice', '').replace('%20', ' ')
-        console_write([COLOR['bright_red'], msg, self.roomname])
+        self.console_write(COLOR['bright_red'], msg)
 
     def on_doublesignon(self):
-        console_write([COLOR['bright_red'], 'This account is already in this room. Aborting!', self.roomname])
+        self.console_write(COLOR['bright_red'], 'This account is already in this room. Aborting!')
         self.is_connected = False
 
     def on_privmsg(self, msg, msg_sender):
         """
-        Message command controller.
+        Message command controller
         :param msg: str message.
         :param msg_sender: str the sender of the message.
         """
+
+        # Get user info object of the user sending the message..
+        self.user_obj = self.find_user_info(msg_sender)
+
         if msg.startswith('/'):
             msg_cmd = msg.split(' ')
             if msg_cmd[0] == '/msg':
                 private_msg = ' '.join(msg_cmd[2:])
-                self.private_message_handler(msg_sender, private_msg)
+                self.private_message_handler(msg_sender, private_msg.strip())
 
             elif msg_cmd[0] == '/mbs':
                 media_type = msg_cmd[1]
                 media_id = msg_cmd[2]
-                thread.start_new_thread(self.media_broadcast_start, (media_type, media_id, msg_sender,))
+                Thread(target=self.on_media_broadcast_start, args=(media_type, media_id, msg_sender, )).start()
 
             elif msg_cmd[0] == '/mbc':
                 media_type = msg_cmd[1]
-                self.media_broadcast_close(media_type, msg_sender)
+                self.on_media_broadcast_close(media_type, msg_sender)
 
             elif msg_cmd[0] == '/mbpa':
                 media_type = msg_cmd[1]
-                self.media_broadcast_paused(media_type, msg_sender)
+                self.on_media_broadcast_paused(media_type, msg_sender)
 
             elif msg_cmd[0] == '/mbpl':
                 media_type = msg_cmd[1]
                 time_point = int(msg_cmd[2])
-                # start in new thread
-                self.media_broadcast_resumed(media_type, time_point, msg_sender)
+                self.on_media_broadcast_play(media_type, time_point, msg_sender)
 
             elif msg_cmd[0] == '/mbsk':
                 media_type = msg_cmd[1]
                 time_point = int(msg_cmd[2])
-                # start in new thread
-                self.media_broadcast_skip(media_type, time_point, msg_sender)
+                self.on_media_broadcast_skip(media_type, time_point, msg_sender)
         else:
-            self.message_handler(msg_sender, msg)
+            self.message_handler(msg_sender, msg.strip())
 
     # Message Handler.
     def message_handler(self, msg_sender, msg):
@@ -586,7 +588,7 @@ class TinychatRTMPClient:
         :param msg_sender: str the user sending a message
         :param msg: str the message
         """
-        console_write([COLOR['green'], msg_sender + ':' + msg, self.roomname])
+        self.console_write(COLOR['green'], msg_sender + ':' + msg)
 
     # Private message Handler.
     def private_message_handler(self, msg_sender, private_msg):
@@ -595,53 +597,53 @@ class TinychatRTMPClient:
         :param msg_sender: str the user sending the private message.
         :param private_msg: str the private message.
         """
-        console_write([COLOR['white'], 'Private message from ' + msg_sender + ':' + private_msg, self.roomname])
+        self.console_write(COLOR['white'], 'Private message from ' + msg_sender + ':' + private_msg)
 
     # Media Events.
-    def media_broadcast_start(self, media_type, video_id, usr_nick):
+    def on_media_broadcast_start(self, media_type, video_id, usr_nick):
         """
         A user started a media broadcast.
         :param media_type: str the type of media. youTube or soundCloud.
         :param video_id: str the youtube ID or souncloud trackID.
         :param usr_nick: str the user name of the user playing media.
         """
-        console_write([COLOR['bright_magenta'], usr_nick + ' is playing ' + media_type + ' ' + video_id, self.roomname])
+        self.console_write(COLOR['bright_magenta'], usr_nick + ' is playing ' + media_type + ' ' + video_id)
 
-    def media_broadcast_close(self, media_type, usr_nick):
+    def on_media_broadcast_close(self, media_type, usr_nick):
         """
         A user closed a media broadcast.
         :param media_type: str the type of media. youTube or soundCloud.
         :param usr_nick: str the user name of the user closing the media.
         """
-        console_write([COLOR['bright_magenta'], usr_nick + ' closed the ' + media_type, self.roomname])
+        self.console_write(COLOR['bright_magenta'], usr_nick + ' closed the ' + media_type)
 
-    def media_broadcast_paused(self, media_type, usr_nick):
+    def on_media_broadcast_paused(self, media_type, usr_nick):
         """
         A user paused the media broadcast.
         :param media_type: str the type of media being paused. youTube or soundCloud.
         :param usr_nick: str the user name of the user pausing the media.
         """
-        console_write([COLOR['bright_magenta'], usr_nick + ' paused the ' + media_type, self.roomname])
+        self.console_write(COLOR['bright_magenta'], usr_nick + ' paused the ' + media_type)
 
-    def media_broadcast_resumed(self, media_type, time_point, usr_nick):
+    def on_media_broadcast_play(self, media_type, time_point, usr_nick):
         """
         A user resumed playing a media broadcast.
         :param media_type: str the media type. youTube or soundCloud.
         :param time_point: int the time point in the tune in milliseconds.
         :param usr_nick: str the user resuming the tune.
         """
-        console_write([COLOR['bright_magenta'], usr_nick +
-                       ' resumed the ' + media_type + ' at: ' + str(time_point), self.roomname])
+        self.console_write(COLOR['bright_magenta'], usr_nick +
+                           ' resumed the ' + media_type + ' at: ' + str(time_point))
 
-    def media_broadcast_skip(self, media_type, time_point, usr_nick):
+    def on_media_broadcast_skip(self, media_type, time_point, usr_nick):
         """
         A user time searched a tune.
         :param media_type: str the media type. youTube or soundCloud.
         :param time_point: int the time point in the tune in milliseconds.
         :param usr_nick: str the user time searching the tune.
         """
-        console_write([COLOR['bright_magenta'], usr_nick + ' time searched the ' + media_type +
-                       ' at: ' + str(time_point), self.roomname])
+        self.console_write(COLOR['bright_magenta'], usr_nick + ' time searched the ' + media_type +
+                           ' at: ' + str(time_point))
 
     # User Related
     def add_user_info(self, usr_nick):
@@ -675,21 +677,21 @@ class TinychatRTMPClient:
         bauth_key = tinychat_api.get_bauth_token(self.roomname, self.client_nick, self.client_id,
                                                  self.greenroom, proxy=self.proxy)
         if bauth_key != 'PW':
-            self._sendCommand('bauth', [u'' + bauth_key])
+            self._send_command('bauth', [u'' + bauth_key])
 
     def send_cauth_msg(self, cauthkey):
         """
         Send the cauth key message with a working cauth key, we need to send this before we can chat.
         :param cauthkey: str a working cauth key.
         """
-        self._sendCommand('cauth', [u'' + cauthkey])
+        self._send_command('cauth', [u'' + cauthkey])
 
     def send_owner_run_msg(self, msg):
         """
         Send owner run message. The client has to be mod when sending this message.
         :param msg: the message str to send.
         """
-        self._sendCommand('owner_run', [u'notice' + msg.replace(' ', '%20')])
+        self._send_command('owner_run', [u'notice' + msg.replace(' ', '%20')])
 
     def send_bot_msg(self, msg, is_mod=False):
         """
@@ -700,7 +702,7 @@ class TinychatRTMPClient:
         if is_mod:
             self.send_owner_run_msg(msg)
         else:
-            self._sendCommand('privmsg', [u'' + self._encode_msg(msg), u'#000000,en'])
+            self._send_command('privmsg', [u'' + self._encode_msg(msg), u'#000000,en'])
 
     def send_private_bot_msg(self, msg, nick):
         """
@@ -708,14 +710,14 @@ class TinychatRTMPClient:
         :param msg: str the message to send.
         :param nick: str the user to receive the message.
         """
-        self._sendCommand('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg), u'#000000,en'])
+        self._send_command('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg), u'#000000,en'])
 
     def send_chat_msg(self, msg):
         """
         Send a chat room message with a random color.
         :param msg: str the message to send.
         """
-        self._sendCommand('privmsg', [u'' + self._encode_msg(msg), u'' + random_color() + ',en'])
+        self._send_command('privmsg', [u'' + self._encode_msg(msg), u'' + random_color() + ',en'])
 
     def send_private_msg(self, msg, nick):
         """
@@ -725,10 +727,10 @@ class TinychatRTMPClient:
         """
         user = self.find_user_info(nick)
         if user is not None:
-            self._sendCommand('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg),
-                                          u'' + random_color() + ',en', u'n' + str(user.id) + '-' + nick])
-            self._sendCommand('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg),
-                                          u'' + random_color() + ',en', u'b' + str(user.id) + '-' + nick])
+            self._send_command('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg),
+                                           u'' + random_color() + ',en', u'n' + str(user.id) + '-' + nick])
+            self._send_command('privmsg', [u'' + self._encode_msg('/msg ' + nick + ' ' + msg),
+                                           u'' + random_color() + ',en', u'b' + str(user.id) + '-' + nick])
 
     def send_userinfo_request_msg(self, user_id):
         """
@@ -736,7 +738,7 @@ class TinychatRTMPClient:
         :param user_id: str user id of the user we want info from.
         :return:
         """
-        self._sendCommand('account', [u'' + str(user_id)])
+        self._send_command('account', [u'' + str(user_id)])
 
     def send_undercover_msg(self, nick, msg):
         """
@@ -749,15 +751,15 @@ class TinychatRTMPClient:
         """
         user = self.find_user_info(nick)
         if user is not None:
-            self._sendCommand('privmsg', [u'' + self._encode_msg(msg), '#0,en', u'b' + str(user.id) + '-' + nick])
-            self._sendCommand('privmsg', [u'' + self._encode_msg(msg), '#0,en', u'n' + str(user.id) + '-' + nick])
+            self._send_command('privmsg', [u'' + self._encode_msg(msg), '#0,en', u'b' + str(user.id) + '-' + nick])
+            self._send_command('privmsg', [u'' + self._encode_msg(msg), '#0,en', u'n' + str(user.id) + '-' + nick])
 
     def set_nick(self):
         """ Send the nick message. """
         if not self.client_nick:
             self.client_nick = create_random_string(5, 25)
-        console_write([COLOR['white'], 'Setting nick: ' + self.client_nick, self.roomname])
-        self._sendCommand('nick', [u'' + self.client_nick])
+        self.console_write(COLOR['white'], 'Setting nick: ' + self.client_nick)
+        self._send_command('nick', [u'' + self.client_nick])
 
     def send_ban_msg(self, nick, uid):
         """
@@ -765,14 +767,14 @@ class TinychatRTMPClient:
         :param nick: str the user name of the user we want to ban.
         :param uid: str the ID of the user we want to ban.
         """
-        self._sendCommand('kick', [u'' + nick, str(uid)])
+        self._send_command('kick', [u'' + nick, str(uid)])
 
     def send_forgive_msg(self, uid):
         """
         Send forgive message. The client has to be mod when sending this message.
         :param uid: str the ID of the user we want to forgive.
         """
-        self._sendCommand('forgive', [u'' + str(uid)])
+        self._send_command('forgive', [u'' + str(uid)])
         self.send_banlist_msg()
 
     def send_banlist_msg(self):
@@ -780,52 +782,60 @@ class TinychatRTMPClient:
         Send banlist message. The client has to be mod when sending this message.
         :return:
         """
-        self._sendCommand('banlist', [])
+        self._send_command('banlist', [])
 
     def send_topic_msg(self, topic):
         """
         Send a room topic message. The client has to be mod when sending this message.
         :param topic: str the room topic.
         """
-        self._sendCommand('topic', [u'' + topic])
+        self._send_command('topic', [u'' + topic])
 
     def send_close_user_msg(self, nick):
         """
         Send close user broadcast message. The client has to be mod when sending this message.
         :param nick: str the user name of the user we want to close.
         """
-        self._sendCommand('owner_run', [u'_close' + nick])
+        self._send_command('owner_run', [u'_close' + nick])
 
-    def play_youtube(self, video_id):
+    # Media Message Functions
+    def send_media_broadcast_start(self, media_type, video_id, time_point=0, private_nick=None):  # NEW
         """
-        Start a youtube video.
-        :param video_id: str the youtube video ID.
+        Starts a media broadcast.
+        NOTE: This method replaces play_youtube and play_soundcloud
+        :param media_type: str 'youTube' or 'soundCloud'
+        :param video_id: str the media video ID.
+        :param time_point: int where to start the media from in milliseconds.
+        :param private_nick: str if not None, start the media broadcast for this username only.
         """
-        self.send_chat_msg('/mbs youTube ' + str(video_id) + ' 0')
+        mbs_msg = '/mbs %s %s %s' % (media_type, str(video_id), str(time_point))
+        if private_nick is not None:
+            self.send_undercover_msg(private_nick, mbs_msg)
+        else:
+            self.send_chat_msg(mbs_msg)
 
-    def stop_youtube(self):
-        """ Stop/Close a youtube video. """
-        self.send_chat_msg('/mbc youTube')
-
-    def play_soundcloud(self, track_id):
+    def send_media_broadcast_close(self, media_type):  # NEW
         """
-        Start a soundcloud video.
-        :param track_id: str soundcloud track ID.
+        Close a media broadcast.
+        NOTE: This method replaces stop_youtube and stop_soundcloud
+        :param media_type: str 'youTube' or 'soundCloud'
         """
-        self.send_chat_msg('/mbs soundCloud ' + str(track_id) + ' 0')
+        self.send_chat_msg('/mbc ' + media_type)
 
-    def stop_soundcloud(self):
-        """  Stop/Close a soundcloud video. """
-        self.send_chat_msg('/mbc soundCloud')
+    # TODO: implement this
+    def send_media_broadcast_play(self, media_type, time_point):  # NEW
+        self.send_chat_msg('/mbpl ' + media_type + ' ' + str(time_point))
 
-    def nick_inuse(self):
-        """ Choose a different user name if the one we chose originally was being used. """
-        self.client_nick += str(random.randint(0, 10))
-        console_write([COLOR['white'], 'Nick already taken. Changing nick to: ' + self.client_nick, self.roomname])
-        self.set_nick()
+    # TODO: implement this
+    def send_media_broadcast_pause(self, media_type):  # NEW
+        self.send_chat_msg('/mbpa ' + media_type)
+
+    # TODO: implement this
+    def send_media_broadcast_skip(self, media_type, time_point):  # NEW
+        self.send_chat_msg('/mbsk ' + media_type + ' ' + str(time_point))
 
     # Message Cunstruction.
-    def _sendCommand(self, cmd, params=[]):
+    def _send_command(self, cmd, params=[]):
         """
         Calls remote procedure calls (RPC) at the receiving end.
         :param cmd: str remote command.
@@ -838,43 +848,44 @@ class TinychatRTMPClient:
         self.connection.writer.write(msg)
         self.connection.writer.flush()
 
-    def _sendCreateStream(self):
+    def _send_create_stream(self):
         """ Send createStream message. """
         msg = {
             'msg': rtmp_protocol.DataTypes.COMMAND,
             'command': [u'' + 'createStream', 12, None]
         }
-        console_write([COLOR['white'], 'Sending createStream message.', self.roomname])
+        self.console_write(COLOR['white'], 'Sending createStream message.')
         self.connection.writer.write(msg)
         self.connection.writer.flush()
 
-    def _sendCloseStream(self):
+    def _send_close_stream(self):
         """ Send closeStream message. """
         msg = {
             'msg': rtmp_protocol.DataTypes.COMMAND,
             'command': [u'' + 'closeStream', 0, None]
         }
-        console_write([COLOR['white'], 'Closing stream.', self.roomname])
+        self.console_write(COLOR['white'], 'Closing stream.')
         self.connection.writer.writepublish(msg)
         self.connection.writer.flush()
 
-    def _sendPublish(self):
+    def _send_publish(self):
         """ Send publish message. """
         msg = {
             'msg': rtmp_protocol.DataTypes.COMMAND,
             'command': [u'' + 'publish', 0, None, u'' + str(self.client_id), u'' + 'live']
         }
-        console_write([COLOR['white'], 'Sending publish message.', self.roomname])
+        self.console_write(COLOR['white'], 'Sending publish message.')
         self.connection.writer.writepublish(msg)
         self.connection.writer.flush()
 
-    def _sendPingRequest(self):
+    def send_ping_request(self):
         # TODO: Make this method work!
         msg = {
             'msg': rtmp_protocol.DataTypes.USER_CONTROL,
-            'event_type': rtmp_protocol.UserControlTypes.PING_REQUEST
+            'event_type': rtmp_protocol.UserControlTypes.PING_REQUEST,
         }
-        self.connection.handle_simple_message(msg)
+        self.connection.writer.write(msg)
+        # self.connection.handle_simple_message(msg)
         self.connection.writer.flush()
 
     # Helper Methods
@@ -887,7 +898,10 @@ class TinychatRTMPClient:
         chars = msg.split(',')
         msg = ''
         for i in chars:
-            msg += unichr(int(i))
+            try:
+                msg += unichr(int(i))
+            except ValueError:
+                pass
         return msg
 
     def _encode_msg(self, msg):
@@ -899,20 +913,18 @@ class TinychatRTMPClient:
         return ','.join(str(ord(char)) for char in msg)
 
     # Timed Auto Method.
-    def start_auto_job_timer(self):
+    def start_auto_job_timer(self):  # EDITED
         """
         Just like using tinychat with a browser, this method will
-        fetch the room config from tinychat API every 5 minute.
+        fetch the room config from tinychat API every 5 minute(300 seconds).
         See line 228 at http://tinychat.com/embed/chat.js
         """
-        ts_now = int(time.time())
         while True:
-            counter = int(time.time())
-            if counter == ts_now + 300:  # 300 seconds = 5 minutes
-                if self.is_connected:
-                    tinychat_api.get_roomconfig_xml(self.roomname, self.room_pass, proxy=self.proxy)
-                self.start_auto_job_timer()
-                break
+            time.sleep(SETTINGS['auto_job_interval'])
+            if self.is_connected:
+                tinychat_api.get_roomconfig_xml(self.roomname, self.room_pass, proxy=self.proxy)
+            break
+        self.start_auto_job_timer()
 
 
 def main():
@@ -925,7 +937,9 @@ def main():
     client = TinychatRTMPClient(room_name, nick=nickname, account=login_account,
                                 password=login_password, room_pass=room_password)
 
-    thread.start_new_thread(client.prepare_connect, ())
+    t = Thread(target=client.prepare_connect)
+    t.daemon = True
+    t.start()
     while not client.is_connected:
         time.sleep(1)
     while client.is_connected:
