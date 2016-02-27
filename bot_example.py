@@ -1,15 +1,15 @@
-""" Tinychat bot with some basic commands. v 3.2 """
+""" Tinychat bot with some basic commands. v 3.3 """
 import re
 import random
 import threading
 import tinychat
-from api import soundcloud, youtube, other_apis
+from api import soundcloud, youtube, other_apis, lastfm
 
 
 #  Bot Settings.
 OPTIONS = {
     'prefix': '!',                              # Command prefix.
-    'key': '65rtygg',                           # unique secret key.
+    'key': '7dfugsd',                           # unique secret key.
     'auto_message_enabled': True,               # enable auto message sender.
     'auto_message_interval': 300,               # auto message sender interval in seconds.
     'badnicks': 'badnicks.txt',                 # bad nicks file.
@@ -36,11 +36,12 @@ class TinychatBot(tinychat.TinychatRTMPClient):
     key = OPTIONS['key']
     no_cam = False
     no_guests = False
+    init_time = tinychat.time.time()
+    # Media Player Related.
     playlist = []
     search_list = []
     inowplay = 0
     last_played_media = {}      # NEW
-    # user_obj = object         moved to tinychat.py
     media_start_time = 0        # NEW
     media_timer_thread = None   # NEW
 
@@ -73,14 +74,14 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                         if self.is_client_mod:
                             self.send_ban_msg(join_info_dict['nick'], join_info_dict['id'])
                             self.send_forgive_msg(join_info_dict['id'])
-                            self.send_bot_msg('*Auto-Banned:* (bad account)')
+                            self.send_bot_msg('*Auto-Banned:* (bad account)', self.is_client_mod)
         else:
             if join_info_dict['id'] is not self.client_id:
                 if self.no_guests:
                     self.send_ban_msg(join_info_dict['nick'], join_info_dict['id'])
                     # remove next line to ban.
                     self.send_forgive_msg(join_info_dict['id'])
-                    self.send_bot_msg('*Auto-Banned:* (guests not allowed)')
+                    self.send_bot_msg('*Auto-Banned:* (guests not allowed)', self.is_client_mod)
                 else:
                     self.console_write(tinychat.COLOR['cyan'], join_info_dict['nick'] +
                                        ':' + str(join_info_dict['id']) + ' joined the room.')
@@ -125,25 +126,34 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                         if user is not None:
                             if user.user_account:
                                 # Greet user with account name.
-                                self.send_bot_msg('*Welcome to* ' + self.roomname +
-                                                  ' *' + new + '*:' + user.user_account, self.is_client_mod)
+                                self.send_bot_msg('*Welcome* ' + new + ':' + str(uid) + ':' + user.user_account,
+                                                  self.is_client_mod)
                             else:
-                                self.send_bot_msg('*Welcome to* ' + self.roomname +
-                                                  ' *' + new + '*', self.is_client_mod)
+                                self.send_bot_msg('*Welcome* ' + new + ':' + str(uid), self.is_client_mod)
 
                         if len(self.playlist) is not 0:
-                            # Play the media at the correct start time.
-                            self.send_media_broadcast_start(self.last_played_media['type'],
-                                                            self.last_played_media['video_id'],
-                                                            time_point=self.current_media_time_point(), private_nick=new)
+                                # Play the media at the correct start time.
+                                self.send_media_broadcast_start(self.last_played_media['type'],
+                                                                self.last_played_media['video_id'],
+                                                                time_point=self.current_media_time_point(),
+                                                                private_nick=new)
 
         self.console_write(tinychat.COLOR['bright_cyan'], old + ':' + str(uid) + ' changed nick to: ' + new)
 
     # Media Events.
     def on_media_broadcast_start(self, media_type, video_id, usr_nick):
-        if self.media_timer_thread is not None:
-            if self.media_timer_thread.is_alive():
-                self.media_timer_thread.cancel()
+        """
+        A user started a media broadcast.
+        :param media_type: str the type of media. youTube or soundCloud.
+        :param video_id: str the youtube ID or souncloud track ID.
+        :param usr_nick: str the user name of the user playing media.
+        """
+        self.cancel_media_event_timer()
+
+        # are we in pause state?
+        if 'pause' in self.last_played_media:
+            # delete pause time point.
+            del self.last_played_media['pause']
 
         video_time = 0
 
@@ -159,8 +169,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 self.last_played_media = _soundcloud
                 video_time = _soundcloud['video_time']
 
+        self.media_event_timer(video_time)
         self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' is playing ' + media_type + ' ' + video_id)
-        self.media_timer(video_time)
 
     def on_media_broadcast_close(self, media_type, usr_nick):
         """
@@ -168,9 +178,11 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param media_type: str the type of media. youTube or soundCloud.
         :param usr_nick: str the user name of the user closing the media.
         """
-        if self.media_timer_thread is not None:
-            if self.media_timer_thread.is_alive():
-                self.media_timer_thread.cancel()
+        self.cancel_media_event_timer()
+        # are we in pause state?
+        if 'pause' in self.last_played_media:
+            # delete pause time point.
+            del self.last_played_media['pause']
         self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' closed the ' + media_type)
 
     def on_media_broadcast_paused(self, media_type, usr_nick):
@@ -179,9 +191,15 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param media_type: str the type of media being paused. youTube or soundCloud.
         :param usr_nick: str the user name of the user pausing the media.
         """
-        if self.media_timer_thread is not None:
-            if self.media_timer_thread.is_alive():
-                self.media_timer_thread.cancel()
+        self.cancel_media_event_timer()
+        # are we in pause state already?
+        if 'pause' in self.last_played_media:
+            # if so delete old pause timepoint.
+            del self.last_played_media['pause']
+        # make a new pause timepoint.
+        ts_now = int(tinychat.time.time() * 1000)
+        self.last_played_media['pause'] = ts_now - self.media_start_time
+
         self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' paused the ' + media_type)
 
     def on_media_broadcast_play(self, media_type, time_point, usr_nick):
@@ -191,13 +209,16 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param time_point: int the time point in the tune in milliseconds.
         :param usr_nick: str the user resuming the tune.
         """
+        self.cancel_media_event_timer()
         new_media_time = self.last_played_media['video_time'] - time_point
         self.media_start_time = new_media_time
-        if self.media_timer_thread is not None:
-            if self.media_timer_thread.is_alive():
-                self.media_timer_thread.cancel()
-        self.media_timer(new_media_time)
 
+        # are we in pause state?
+        if 'pause' in self.last_played_media:
+            # delete pause time point.
+            del self.last_played_media['pause']
+
+        self.media_event_timer(new_media_time)
         self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' resumed the ' +
                            media_type + ' at: ' + self.to_human_time(time_point))
 
@@ -208,13 +229,14 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param time_point: int the time point in the tune in milliseconds.
         :param usr_nick: str the user time searching the tune.
         """
+        self.cancel_media_event_timer()
         new_media_time = self.last_played_media['video_time'] - time_point
         self.media_start_time = new_media_time
-        if self.media_timer_thread is not None:
-            if self.media_timer_thread.is_alive():
-                self.media_timer_thread.cancel()
-        self.media_timer(new_media_time)
 
+        if 'pause' in self.last_played_media:
+            self.last_played_media['pause'] = new_media_time
+
+        self.media_event_timer(new_media_time)
         self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' time searched the ' +
                            media_type + ' at: ' + self.to_human_time(time_point))
 
@@ -244,7 +266,20 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             elif cmd == OPTIONS['prefix'] + 'reboot':
                 self.do_reboot()
 
+            # Owner and bot controller commands
+            elif cmd == OPTIONS['prefix'] + 'mi':
+                self.do_media_info()
+
             # Mod and bot controller commands
+            elif cmd == OPTIONS['prefix'] + 'top':  # NEW
+                threading.Thread(target=self.do_lastfm_chart, args=(cmd_arg, )).start()
+
+            elif cmd == OPTIONS['prefix'] + 'ran':  # NEW
+                threading.Thread(target=self.do_lastfm_random_tunes, args=(cmd_arg, )).start()
+
+            elif cmd == OPTIONS['prefix'] + 'tag':  # NEW
+                threading.Thread(target=self.search_lastfm_by_tag, args=(cmd_arg, )).start()
+
             elif cmd == OPTIONS['prefix'] + 'close':
                 self.do_close_broadcast(cmd_arg)
 
@@ -259,6 +294,9 @@ class TinychatBot(tinychat.TinychatRTMPClient):
 
             elif cmd == OPTIONS['prefix'] + 'cm':
                 self.do_close_media()
+
+            elif cmd == OPTIONS['prefix'] + 'cpl':  # NEW
+                self.do_clear_playlist()
 
             elif cmd == OPTIONS['prefix'] + 'nick':
                 self.do_nick(cmd_arg)
@@ -309,9 +347,6 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             elif cmd == OPTIONS['prefix'] + 'help':
                 self.do_help()
 
-            elif cmd == OPTIONS['prefix'] + 'plugin':
-                self.do_plugin()
-
             elif cmd == OPTIONS['prefix'] + 't':  # uptime -> t
                 self.do_uptime()
 
@@ -338,7 +373,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
 
             # Tinychat API commands.
             elif cmd == OPTIONS['prefix'] + 'spy':
-                threading.Thread(target=self.do_spy, args=(msg_sender, cmd_arg,)).start()
+                threading.Thread(target=self.do_spy, args=(msg_sender, cmd_arg, )).start()
 
             elif cmd == OPTIONS['prefix'] + 'acspy':  # usrspy -> acspy
                 threading.Thread(target=self.do_account_spy, args=(msg_sender, cmd_arg, )).start()
@@ -383,7 +418,123 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         if self.user_obj.is_owner:
             self.reconnect()
 
+    # == Owner And Bot Controller Commands Methods. ==
+    def do_media_info(self):
+        """ Shows basic media info. """
+        # This method was used while debugging the media player.
+        if self.user_obj.is_owner or self.user_obj.has_power:
+            if self.is_client_mod:
+                self.send_owner_run_msg('*I Now Play:* ' + str(self.inowplay))
+                self.send_owner_run_msg('*Playlist Length:* ' + str(len(self.playlist)))
+                self.send_owner_run_msg('*Current Time Point:* ' + self.to_human_time(self.current_media_time_point()))
+                self.send_owner_run_msg('*Active Threads:* ' + str(threading.active_count()))
+
     # == Mod And Bot Controller Command Methods. ==
+    def do_lastfm_chart(self, chart_items):  # NEW
+        """
+        Makes a playlist from the currently most played tunes on last.fm
+        :param chart_items: int the amount of tunes we want.
+        """
+        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+            if self.is_client_mod:
+                if chart_items is 0 or chart_items is None:
+                    self.send_bot_msg('Please specify the amount of tunes you want.', self.is_client_mod)
+                else:
+                    try:
+                        _items = int(chart_items)
+                    except ValueError:
+                        self.send_bot_msg('Only numbers allowed.', self.is_client_mod)
+                    else:
+                        if _items > 0:
+                            if _items > 30:
+                                self.send_bot_msg('No more than 30 tunes.', self.is_client_mod)
+                            else:
+                                self.send_bot_msg('Please wait while creating a playlist...', self.is_client_mod)
+                                last = lastfm.get_lastfm_chart(_items)
+                                if last is not None:
+                                    if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
+                                        self.playlist.extend(last)
+                                        self.send_bot_msg('*Added:* ' + str(len(last)) +
+                                                          ' *tunes from last.fm chart.*', self.is_client_mod)
+                                    else:
+                                        self.playlist.extend(last)
+                                        self.send_bot_msg('*Added:* ' + str(len(last)) +
+                                                          ' *tunes from last.fm chart.*', self.is_client_mod)
+                                        self.last_played_media = self.playlist[self.inowplay]
+                                        self.send_media_broadcast_start(self.playlist[self.inowplay]['type'],
+                                                                        self.playlist[self.inowplay]['video_id'])
+                                        self.media_event_timer(self.playlist[self.inowplay]['video_time'])
+                                        self.inowplay += 1  # prepare the next tune in the playlist.
+                                else:
+                                    self.send_bot_msg('Failed to retrieve a result from last.fm.', self.is_client_mod)
+
+    def do_lastfm_random_tunes(self, max_tunes):  # NEW
+        """
+        Creates a playlist from what other people are listening to on last.fm.
+        :param max_tunes: int the max amount of tunes.
+        """
+        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+            if self.is_client_mod:
+                if max_tunes is 0 or max_tunes is None:
+                    self.send_bot_msg('Please specify the max amount of tunes you want.', self.is_client_mod)
+                else:
+                    try:
+                        _items = int(max_tunes)
+                    except ValueError:
+                        self.send_bot_msg('Only numbers allowed.', self.is_client_mod)
+                    else:
+                        if _items > 0:
+                            if _items > 50:
+                                self.send_bot_msg('No more than 50 tunes.', self.is_client_mod)
+                            else:
+                                self.send_bot_msg('Please wait while creating a playlist...', self.is_client_mod)
+                                last = lastfm.lastfm_listening_now(max_tunes)
+                                if last is not None:
+                                    if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
+                                        self.playlist.extend(last)
+                                        self.send_bot_msg('*Added:* ' + str(len(last)) + ' *tunes from last.fm*',
+                                                          self.is_client_mod)
+                                    else:
+                                        self.playlist.extend(last)
+                                        self.send_bot_msg('*Added:* ' + str(len(last)) + ' *tunes from last.fm*',
+                                                          self.is_client_mod)
+                                        self.last_played_media = self.playlist[self.inowplay]
+                                        self.send_media_broadcast_start(self.playlist[self.inowplay]['type'],
+                                                                        self.playlist[self.inowplay]['video_id'])
+                                        self.media_event_timer(self.playlist[self.inowplay]['video_time'])
+                                        self.inowplay += 1  # prepare the next tune in the playlist.
+                                else:
+                                    self.send_bot_msg('Failed to retrieve a result from last.fm.', self.is_client_mod)
+
+    def search_lastfm_by_tag(self, search_str):  # NEW
+        """
+        Searches last.fm for tunes matching the search term and creates a playlist from them.
+        :param search_str: str the search term to search for.
+        """
+        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+            if self.is_client_mod:
+                if len(search_str) is 0:
+                    self.send_bot_msg('Missing search tag.', self.is_client_mod)
+                else:
+                    self.send_bot_msg('Please wait while creating playlist..', self.is_client_mod)
+                    last = lastfm.search_lastfm_by_tag(search_str)
+                    if last is not None:
+                        if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
+                            self.playlist.extend(last)
+                            self.send_bot_msg('*Added:* ' + str(len(last)) + ' *tunes from last.fm*',
+                                              self.is_client_mod)
+                        else:
+                            self.playlist.extend(last)
+                            self.send_bot_msg('*Added:* ' + str(len(last)) + ' *tunes from last.fm*',
+                                              self.is_client_mod)
+                            self.last_played_media = self.playlist[self.inowplay]
+                            self.send_media_broadcast_start(self.playlist[self.inowplay]['type'],
+                                                            self.playlist[self.inowplay]['video_id'])
+                            self.media_event_timer(self.playlist[self.inowplay]['video_time'])
+                            self.inowplay += 1  # prepare the next tune in the playlist.
+                    else:
+                        self.send_bot_msg('Failed to retrieve a result from last.fm.', self.is_client_mod)
+
     def do_close_broadcast(self, user_name):
         """
         Close a user broadcasting.
@@ -414,18 +565,15 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         """ Play the next item in the playlist. """
         if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
             if len(self.playlist) is not 0:
-                if self.inowplay >= len(self.playlist):  # if self.inowplay + 1 >= len(self.playlist):
+                if self.inowplay >= len(self.playlist):
                     self.send_bot_msg('*This is the last tune in the playlist.*', self.is_client_mod)
                 else:
-                    if self.media_timer_thread is not None:
-                        if self.media_timer_thread.is_alive():
-                            self.media_timer_thread.cancel()
+                    self.cancel_media_event_timer()
                     self.last_played_media = self.playlist[self.inowplay]
                     self.send_media_broadcast_start(self.playlist[self.inowplay]['type'],
                                                     self.playlist[self.inowplay]['video_id'])
-                    self.media_timer(self.playlist[self.inowplay]['video_time'])
-                    self.inowplay += 1
-
+                    self.media_event_timer(self.playlist[self.inowplay]['video_time'])
+                    self.inowplay += 1  # prepare the next tune in the playlist.
             else:
                 self.send_bot_msg('*No tunes to skip. The playlist is empty.*', self.is_client_mod)
 
@@ -436,15 +584,24 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 if self.media_timer_thread.is_alive():
                     self.media_timer_thread.cancel()
             self.send_media_broadcast_start(self.last_played_media['type'], self.last_played_media['video_id'])
-            self.media_timer(self.last_played_media['video_time'])
+            self.media_event_timer(self.last_played_media['video_time'])
 
     def do_close_media(self):  # NEW
         """ Closes the active media broadcast."""
         if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
-            if self.media_timer_thread is not None:
-                if self.media_timer_thread.is_alive():
-                    self.media_timer_thread.cancel()
+            self.cancel_media_event_timer()
             self.send_media_broadcast_close(self.last_played_media['type'])
+
+    def do_clear_playlist(self):  # NEW
+        """ Clear the playlist. """
+        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+            if len(self.playlist) is not 0:
+                pl_length = str(len(self.playlist))
+                self.playlist[:] = []
+                self.inowplay = 0
+                self.send_bot_msg('*Deleted* ' + pl_length + ' *items in the playlist.*', self.is_client_mod)
+            else:
+                self.send_bot_msg('*The playlist is empty, nothing to delete.*', self.is_client_mod)
 
     def do_nick(self, new_nick):
         """
@@ -728,7 +885,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                                 self.last_played_media = self.search_list[index_choice]
                                 self.send_media_broadcast_start(self.search_list[index_choice]['type'],
                                                                 self.search_list[index_choice]['video_id'])
-                                self.media_timer(self.search_list[index_choice]['video_time'])
+                                self.media_event_timer(self.search_list[index_choice]['video_time'])
                         else:
                             self.send_bot_msg('Please make a choice between 0-4', self.is_client_mod)
                     except ValueError:
@@ -750,14 +907,11 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             self.send_undercover_msg(self.user_obj.nick, '*Help:* https://github.com/nortxort/pinylib/wiki/' +
                                      'Commands#public-commands')
 
-    def do_plugin(self):
-        """ Posts a link to the tinychat modified "flash game maximizer" firefox plugin. """
-        self.send_bot_msg('http://www.mediafire.com/download/' +
-                          'or62j65oz428igj/flash_game_maximizer-1.3.6-fx6%28tinychat_mod%29.xpi', self.is_client_mod)
-
-    def do_uptime(self):
+    def do_uptime(self):  # EDITED
         """ Shows the bots uptime. """
-        self.send_bot_msg('*Uptime:* ' + self.to_human_time(self.uptime, is_seconds=True), self.is_client_mod)
+        self.send_bot_msg('*Uptime:* ' + self.to_human_time(self.get_uptime()) +
+                          ' *Reconnect Delay:* ' + self.to_human_time(tinychat.SETTINGS['reconnect_delay'] * 1000),
+                          self.is_client_mod)
 
     def do_pmme(self, msg_sender):
         """
@@ -813,7 +967,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     else:
                         self.last_played_media = _youtube
                         self.send_media_broadcast_start(_youtube['type'], _youtube['video_id'])
-                        self.media_timer(_youtube['video_time'])
+                        self.media_event_timer(_youtube['video_time'])
         else:
             self.send_bot_msg('Not enabled right now..')
 
@@ -856,7 +1010,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     else:
                         self.last_played_media = _soundcloud
                         self.send_media_broadcast_start(_soundcloud['type'], _soundcloud['video_id'])
-                        self.media_timer(_soundcloud['video_time'])
+                        self.media_event_timer(_soundcloud['video_time'])
         else:
             self.send_bot_msg('Not enabled right now..')
 
@@ -1048,7 +1202,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 self.do_pm_bridge(msg_sender, pm_parts)
 
         # Print to console.
-        self.console_write(tinychat.COLOR['white'], 'Private message from ' + msg_sender + ':' + private_msg)
+        self.console_write(tinychat.COLOR['white'], 'Private message from ' + msg_sender + ':' +
+                           str(private_msg).replace(self.key, '***KEY***'))
 
     # == Owner Command Methods. ==
     def do_key(self, msg_sender, new_key):
@@ -1059,12 +1214,12 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         """
         if self.user_obj.is_owner:
             if len(new_key) is 0:
-                self.send_private_bot_msg('The current key is: *' + self.key + '*', msg_sender)
+                self.send_private_msg('The current key is: *' + self.key + '*', msg_sender)
             elif len(new_key) < 6:
-                self.send_private_bot_msg('Key must be at least 6 characters long: ' + str(len(self.key)), msg_sender)
+                self.send_private_msg('Key must be at least 6 characters long: ' + str(len(self.key)), msg_sender)
             elif len(new_key) >= 6:
                 self.key = new_key
-                self.send_private_bot_msg('The key was changed to: *' + self.key + '*', msg_sender)
+                self.send_private_msg('The key was changed to: *' + self.key + '*', msg_sender)
 
     def do_clear_bad_nicks(self):
         """ Clears the bad nicks file. """
@@ -1287,7 +1442,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 self.send_private_bot_msg('No user named: ' + pm_to, msg_sender)
 
     #  Timed auto functions.
-    def media_timer_done_handler(self):  # NEW
+    def media_event_handler(self):  # NEW
         if len(self.playlist) is not 0:
             if self.inowplay >= len(self.playlist):
                 if self.is_connected:
@@ -1299,27 +1454,18 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     self.last_played_media = self.playlist[self.inowplay]
                     self.send_media_broadcast_start(self.playlist[self.inowplay]['type'],
                                                     self.playlist[self.inowplay]['video_id'])
-                self.media_timer(self.playlist[self.inowplay]['video_time'])
+                self.media_event_timer(self.playlist[self.inowplay]['video_time'])
                 self.inowplay += 1
 
-    def media_timer(self, video_time):  # NEW
+    def media_event_timer(self, video_time):  # NEW
+        """
+        Set of a timed event thread.
+        :param video_time: int the time in milliseconds.
+        """
         video_time_in_seconds = video_time / 1000
         self.media_start_time = int(tinychat.time.time() * 1000)
-        self.media_timer_thread = threading.Timer(video_time_in_seconds, self.media_timer_done_handler)
+        self.media_timer_thread = threading.Timer(video_time_in_seconds, self.media_event_handler)
         self.media_timer_thread.start()
-
-    def current_media_time_point(self):  # NEW
-        """
-        Returns the currently playing medias time point.
-        :return: int the currently playing medias time point in milliseconds.
-        """
-        if self.media_timer_thread is not None:
-            if self.media_timer_thread.is_alive():
-                ts_now = int(tinychat.time.time() * 1000)
-                elapsed_track_time = ts_now - self.media_start_time
-                return elapsed_track_time
-            return 0
-        return 0
 
     def random_msg(self):
         """
@@ -1333,16 +1479,16 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 next_video_title = self.playlist[self.inowplay + 1]['video_title']
                 next_video_time = self.to_human_time(self.playlist[self.inowplay + 1]['video_time'])
                 upnext = '*Up next is:* ' + next_video_title + ' ' + next_video_time
-            inquee = len(self.playlist) - self.inowplay  # removed - 1
+            inquee = len(self.playlist) - self.inowplay
             plstat = str(len(self.playlist)) + ' *items in the playlist.* ' + str(inquee) + ' *Still in queue.*'
 
         messages = ['Reporting for duty..', 'Hello, is anyone here?', 'Awaiting command..', 'Observing behavior..',
-                    upnext, plstat, '*Uptime:* ' + self.to_human_time(self.uptime, is_seconds=True),
+                    upnext, plstat, '*Uptime:* ' + self.to_human_time(self.get_uptime()),
                     'Type: *' + OPTIONS['prefix'] + 'help* for a list of commands']
 
         return random.choice(messages)
 
-    def start_auto_msg_sender(self):  # EDITED
+    def start_auto_msg_sender(self):
         """
         In rooms with less activity, it can be useful to have the client send auto messages to keep the client alive.
         This method can be disabled by setting BOT_OPTIONS['auto_message_sender'] to False.
@@ -1361,17 +1507,51 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         path = tinychat.SETTINGS['config_path'] + self.roomname + '/'
         return path
 
-    def to_human_time(self, milliseconds, is_seconds=False):
+    def current_media_time_point(self):  # NEW
+        """
+        Returns the currently playing medias time point.
+        :return: int the currently playing medias time point in milliseconds.
+        """
+        if 'pause' in self.last_played_media:
+            return self.last_played_media['pause']
+        else:
+            if self.media_timer_thread is not None:
+                if self.media_timer_thread.is_alive():
+                    ts_now = int(tinychat.time.time() * 1000)
+                    elapsed_track_time = ts_now - self.media_start_time
+                    return elapsed_track_time
+                return 0
+            return 0
+
+    def cancel_media_event_timer(self):  # NEW
+        """
+        Cancel the media event timer if it is running.
+        :return: True if canceled, else False
+        """
+        if self.media_timer_thread is not None:
+            if self.media_timer_thread.is_alive():
+                self.media_timer_thread.cancel()
+                self.media_timer_thread = None
+                return True
+            return False
+        return False
+
+    def get_uptime(self):  # NEW
+        """
+        Gets the bots uptime.
+        NOTE: This will not get reset after a reconnect.
+        :return: int milliseconds.
+        """
+        up = int(tinychat.time.time() - self.init_time)
+        return up * 1000
+
+    def to_human_time(self, milliseconds):  # EDITED
         """
         Converts milliseconds or seconds to (day(s)) hours minutes seconds.
         :param milliseconds: int the milliseconds or seconds to convert.
-        :param is_seconds: bool True if the time is in seconds.
         :return: str in the format (days) hh:mm:ss
         """
-        if is_seconds:
-            seconds = milliseconds
-        else:
-            seconds = milliseconds / 1000
+        seconds = milliseconds / 1000
         m, s = divmod(seconds, 60)
         h, m = divmod(m, 60)
         d, h = divmod(h, 24)
