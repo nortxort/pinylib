@@ -132,11 +132,11 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                                 self.send_bot_msg('*Welcome* ' + new + ':' + str(uid), self.is_client_mod)
 
                         if len(self.playlist) is not 0:
-                                # Play the media at the correct start time.
-                                self.send_media_broadcast_start(self.last_played_media['type'],
-                                                                self.last_played_media['video_id'],
-                                                                time_point=self.current_media_time_point(),
-                                                                private_nick=new)
+                            # Play the media at the correct start time.
+                            self.send_media_broadcast_start(self.last_played_media['type'],
+                                                            self.last_played_media['video_id'],
+                                                            time_point=self.current_media_time_point(),
+                                                            private_nick=new)
 
         self.console_write(tinychat.COLOR['bright_cyan'], old + ':' + str(uid) + ' changed nick to: ' + new)
 
