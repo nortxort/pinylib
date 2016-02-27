@@ -1,5 +1,4 @@
 import web_request
-import isodate
 
 
 def youtube_search(search):
@@ -15,15 +14,17 @@ def youtube_search(search):
     """
 
     if search:
+        if 'list' in search:
+            search = search.split('?list')[0]
         youtube_search_url = 'https://www.googleapis.com/youtube/v3/search?' \
                              'type=video&key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg' \
                              '&maxResults=50&q=%s&part=snippet' % search
 
-        response = web_request.get_request(youtube_search_url, json=True)
+        api_response = web_request.get_request(youtube_search_url, json=True)
 
-        if response['content'] is not None:
+        if api_response is not None:
             try:
-                for item in response['content']['items']:
+                for item in api_response['content']['items']:
                     video_id = item['id']['videoId']
                     video_title = item['snippet']['title'].encode('ascii', 'ignore')
 
@@ -52,12 +53,12 @@ def youtube_search_list(search, results=10):
                              '&key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg' \
                              '&maxResults=50&q=%s&part=snippet' % search
 
-        response = web_request.get_request(youtube_search_url, json=True)
-        if response['content'] is not None:
+        api_response = web_request.get_request(youtube_search_url, json=True)
+        if api_response is not None:
             media_list = []
             try:
                 i = 0
-                for item in response['content']['items']:
+                for item in api_response['content']['items']:
                     if i == results:  # if i >= results:
                         return media_list
                     else:
@@ -89,7 +90,7 @@ def youtube_playlist_search(search, results=5):
                              '&maxResults=50&q=%s&part=snippet' % search
 
         api_response = web_request.get_request(youtube_search_url, json=True)
-        if api_response['content'] is not None:
+        if api_response is not None:
             play_lists = []
             try:
                 for item in api_response['content']['items']:
@@ -120,7 +121,7 @@ def youtube_playlist_videos(playlist_id):
                            '&maxResults=50&part=snippet,id' % playlist_id
 
     api_response = web_request.get_request(playlist_details_url, json=True)
-    if api_response['content'] is not None:
+    if api_response is not None:
         video_list = []
         # next_page_token = api_response['content']['nextPageToken']
         try:
@@ -154,24 +155,26 @@ def youtube_time(video_id, check=True):
     youtube_details_url = 'https://www.googleapis.com/youtube/v3/videos?' \
                           'id=%s&key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg&part=contentDetails,snippet' % video_id
 
-    response = web_request.get_request(youtube_details_url, json=True)
+    api_response = web_request.get_request(youtube_details_url, json=True)
 
-    if response['content'] is not None:
+    if api_response is not None:
         try:
-            contentdetails = response['content']['items'][0]['contentDetails']
-            if check:
-                if 'regionRestriction' in contentdetails:
-                    if 'blocked' in contentdetails['regionRestriction']:
-                        if ('US' or 'DK' or 'PL') in contentdetails['regionRestriction']['blocked']:
-                            return None
-                    if 'allowed' in contentdetails['regionRestriction']:
-                        if ('US' or 'DK' or 'PL') not in contentdetails['regionRestriction']['allowed']:
-                            return None
+            if len(api_response['content']['items']) is not 0:
+                contentdetails = api_response['content']['items'][0]['contentDetails']
+                if check:
+                    if 'regionRestriction' in contentdetails:
+                        if 'blocked' in contentdetails['regionRestriction']:
+                            if ('US' or 'DK' or 'PL') in contentdetails['regionRestriction']['blocked']:
+                                return None
+                        if 'allowed' in contentdetails['regionRestriction']:
+                            if ('US' or 'DK' or 'PL') not in contentdetails['regionRestriction']['allowed']:
+                                return None
 
-            video_time = convert_to_millisecond(contentdetails['duration'])
-            video_title = response['content']['items'][0]['snippet']['title'].encode('ascii', 'ignore')
+                video_time = convert_to_millisecond(contentdetails['duration'])
+                video_title = api_response['content']['items'][0]['snippet']['title'].encode('ascii', 'ignore')
 
-            return {'type': 'youTube', 'video_id': video_id, 'video_time': video_time, 'video_title': video_title}
+                return {'type': 'youTube', 'video_id': video_id, 'video_time': video_time, 'video_title': video_title}
+            return None
         except KeyError:
             return None
 
@@ -181,8 +184,23 @@ def convert_to_millisecond(duration):
     Converts a ISO 8601 duration str to milliseconds.
 
     :param duration: The ISO 8601 duration str
-    :return: int milliseconds
+    :return:  int milliseconds
     """
 
-    milli = isodate.parse_duration(duration)
-    return int(milli.total_seconds() * 1000)
+    duration_string = duration.replace('PT', '').upper()
+    seconds = 0
+    number_string = ''
+
+    for char in duration_string:
+        if char.isnumeric():
+            number_string += char
+        if char == 'H':
+            seconds += (int(number_string) * 60) * 60
+            number_string = ''
+        if char == 'M':
+            seconds += int(number_string) * 60
+            number_string = ''
+        if char == 'S':
+            seconds += int(number_string)
+    return (seconds * 1000)
+    
