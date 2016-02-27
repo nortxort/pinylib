@@ -18,7 +18,7 @@ SETTINGS = {
     'console_colors': True,
     'reconnect_delay': 60,
     'auto_job_interval': 300,
-    'config_path': 'files/rooms/'
+    'config_path': 'files/'
 }
 
 #  Console colors.
@@ -111,8 +111,8 @@ class TinychatRTMPClient:
         self.proxy = proxy
         self.greenroom = False
         self.prefix = u'tinychat'
-        self.swf_url = u'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0655.swf?version=1.0.0.0655/[[DYNAMIC]]/8'
-        self.desktop_version = u'Desktop 1.0.0.0655'
+        self.swf_url = u'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0658.swf?version=1.0.0.0658/[[DYNAMIC]]/8'
+        self.desktop_version = u'Desktop 1.0.0.0658'
         self.embed_url = u'http://tinychat.com/' + self.roomname
         self.client_id = None
         self.connection = None
@@ -121,7 +121,6 @@ class TinychatRTMPClient:
         self.room_users = {}
         self.user_obj = object
         self.is_reconnected = False
-        self.uptime = 0
         self.reconnect_delay = SETTINGS['reconnect_delay']
 
     def console_write(self, color, message):  # MOVED/EDITED
@@ -208,19 +207,19 @@ class TinychatRTMPClient:
                 self.is_connected = False
                 if SETTINGS['debug_mode']:
                     traceback.print_exc()
+                self.reconnect()
 
     def disconnect(self):
         """ Closes the RTMP connection with the remote server. """
-        if self.is_connected:
-            try:
-                self.is_connected = False
-                self.is_client_mod = False
-                self.room_users.clear()
-                self.uptime = 0
-                self.connection.shutdown()
-            except Exception as e:
-                if SETTINGS['debug_mode']:
-                    traceback.print_exc()
+        # if self.is_connected:
+        try:
+            self.is_connected = False
+            self.is_client_mod = False
+            self.room_users.clear()
+            self.connection.shutdown()
+        except Exception as e:
+            if SETTINGS['debug_mode']:
+                traceback.print_exc()
 
     def reconnect(self):  # EDITED
         """ Reconnect to a room with the connection parameters already set. """
@@ -243,15 +242,13 @@ class TinychatRTMPClient:
     def callback(self):
         """ Callback loop that reads from the RTMP stream. """
         failures = 0
-        t = time.time()
         while self.is_connected:
-            self.uptime = time.time() - t
             try:
                 amf0_data = self.connection.reader.next()
                 # amf0_data_format = self.amf0_data['msg']
             except:
                 failures += 1
-                if failures == 3:
+                if failures == 2:
                     self.reconnect()
                     break
             else:
@@ -371,6 +368,7 @@ class TinychatRTMPClient:
                     self.on_doublesignon()
 
                 elif cmd == 'privmsg':
+                    msg_raw = amf0_cmd[4]
                     msg_text = self._decode_msg(u'' + amf0_cmd[4])
                     msg_sender = amf0_cmd[6]
                     self.on_privmsg(msg_text, msg_sender)
@@ -571,12 +569,12 @@ class TinychatRTMPClient:
 
             elif msg_cmd[0] == '/mbpl':
                 media_type = msg_cmd[1]
-                time_point = int(msg_cmd[2])
+                time_point = int(round(msg_cmd[2]))
                 self.on_media_broadcast_play(media_type, time_point, msg_sender)
 
             elif msg_cmd[0] == '/mbsk':
                 media_type = msg_cmd[1]
-                time_point = int(msg_cmd[2])
+                time_point = int(round(msg_cmd[2]))
                 self.on_media_broadcast_skip(media_type, time_point, msg_sender)
         else:
             self.message_handler(msg_sender, msg.strip())
@@ -808,34 +806,69 @@ class TinychatRTMPClient:
         :param time_point: int where to start the media from in milliseconds.
         :param private_nick: str if not None, start the media broadcast for this username only.
         """
-        mbs_msg = '/mbs %s %s %s' % (media_type, str(video_id), str(time_point))
+        mbs_msg = '/mbs %s %s %s' % (media_type, video_id, time_point)
         if private_nick is not None:
             self.send_undercover_msg(private_nick, mbs_msg)
         else:
             self.send_chat_msg(mbs_msg)
 
-    def send_media_broadcast_close(self, media_type):  # NEW
+    def send_media_broadcast_close(self, media_type, private_nick=None):  # EDITED
         """
         Close a media broadcast.
         NOTE: This method replaces stop_youtube and stop_soundcloud
         :param media_type: str 'youTube' or 'soundCloud'
+        :param private_nick str if not None, send this message to this username only.
         """
-        self.send_chat_msg('/mbc ' + media_type)
+        mbc_msg = '/mbc %s' % media_type
+        if private_nick is not None:
+            self.send_undercover_msg(private_nick, mbc_msg)
+        else:
+            self.send_chat_msg(mbc_msg)
 
     # TODO: implement this
-    def send_media_broadcast_play(self, media_type, time_point):  # NEW
-        self.send_chat_msg('/mbpl ' + media_type + ' ' + str(time_point))
+    def send_media_broadcast_play(self, media_type, time_point, private_nick=None):  # EDITED
+        """
+        Play a currently paused media broadcast.
+        :param media_type: str 'youTube' or 'soundCloud'
+        :param time_point: int where to play the media from in milliseconds.
+        :param private_nick: str if not None, send this message to this username only.
+        """
+        mbpl_msg = '/mbpl %s %s' % (media_type, time_point)
+        if private_nick is not None:
+            self.send_undercover_msg(private_nick, mbpl_msg)
+        else:
+            self.send_chat_msg(mbpl_msg)
 
     # TODO: implement this
-    def send_media_broadcast_pause(self, media_type):  # NEW
-        self.send_chat_msg('/mbpa ' + media_type)
+    def send_media_broadcast_pause(self, media_type, private_nick=None):  # EDITED
+        """
+        Pause a currently playing media broadcast.
+        :param media_type: str 'youTube' or 'soundCloud'
+        :param private_nick: str if not None, send this message to this username only.
+        """
+        mbpa_msg = '/mbpa %s' % media_type
+        if private_nick is not None:
+            self.send_undercover_msg(private_nick, mbpa_msg)
+        else:
+            self.send_chat_msg(mbpa_msg)
 
     # TODO: implement this
-    def send_media_broadcast_skip(self, media_type, time_point):  # NEW
-        self.send_chat_msg('/mbsk ' + media_type + ' ' + str(time_point))
+    def send_media_broadcast_skip(self, media_type, time_point, private_nick=None):  # EDITED
+        """
+        Time search a currently playing/paused media broadcast.
+        :param media_type: str 'youTube' or 'soundCloud'
+        :param time_point: int the time point to skip to.
+        :param private_nick: str if not None, send this message to this username only.
+        :return:
+        """
+        mbsk_msg = '/mbsk %s %s' % (media_type, time_point)
+        if private_nick is not None:
+            self.send_undercover_msg(private_nick, mbsk_msg)
+        else:
+            self.send_chat_msg(mbsk_msg)
 
-    # Message Cunstruction.
-    def _send_command(self, cmd, params=[]):
+    # Message Construction.
+    def _send_command(self, cmd, params=[]):  # EDITED
         """
         Calls remote procedure calls (RPC) at the receiving end.
         :param cmd: str remote command.
@@ -845,8 +878,13 @@ class TinychatRTMPClient:
             'msg': rtmp_protocol.DataTypes.COMMAND,
             'command': [u'' + cmd, 0, None] + params
         }
-        self.connection.writer.write(msg)
-        self.connection.writer.flush()
+        try:
+            self.connection.writer.write(msg)
+            self.connection.writer.flush()
+        except Exception:
+            # If we fail to send something, then we must assume that we have lost connection.
+            self.reconnect()
+            #  self.console_write(COLOR['bright_red'], 'Failed to send: ' + cmd + '->' + str(msg))
 
     def _send_create_stream(self):
         """ Send createStream message. """
