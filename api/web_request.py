@@ -19,10 +19,10 @@ def delete_login_cookies():
     :return: True if logged in else False
     """
     if 'pass' in _request_session.cookies:
-        _request_session.cookies['pass'] = None
-        _request_session.cookies['hash'] = None
-        _request_session.cookies['user'] = None
-        _request_session.cookies['tcuid'] = None
+        del _request_session.cookies['pass']
+        del _request_session.cookies['hash']
+        del _request_session.cookies['user']
+        del _request_session.cookies['tcuid']
         return True
     return False
 
@@ -36,28 +36,28 @@ def get_request(url, json=False, proxy=None):
     :return: dict{'content', 'cookies', 'headers', 'status_code'}
     """
     header = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:41.0) Gecko/20100101 Firefox/41.0',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:44.0) Gecko/20100101 Firefox/44.0',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive',
-            'Referer': 'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0650.swf?version=1.0.0.0650'
+            'Referer': 'http://tinychat.com'
         }
 
     if proxy:
         proxy = {'http': 'http://' + proxy}
-
-    gr = _request_session.request(method='GET', url=url, headers=header, proxies=proxy)
-
-    if json:
-        try:
-            content = gr.json()
-        except ValueError:
-            content = None
-    else:
-        content = gr.text
-
-    return {'content': content, 'cookies': gr.cookies, 'headers': gr.headers, 'status_code': gr.status_code}
+    try:
+        gr = _request_session.request(method='GET', url=url, headers=header, proxies=proxy, timeout=20)
+        if json:
+            try:
+                content = gr.json()
+            except ValueError:
+                return None
+        else:
+            content = gr.text
+        return {'content': content, 'cookies': gr.cookies, 'headers': gr.headers, 'status_code': gr.status_code}
+    except (requests.ConnectionError, requests.RequestException):
+        return None
 
 
 def post_login(account, password):
@@ -68,7 +68,7 @@ def post_login(account, password):
     :return: dict{'content', 'cookies', 'headers', 'status_code'}
     """
     header = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:41.0) Gecko/20100101 Firefox/41.0',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:44.0) Gecko/20100101 Firefox/44.0',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Accept-Encoding': 'gzip, deflate',
@@ -76,7 +76,7 @@ def post_login(account, password):
         'Referer': 'http://tinychat.com/login'
     }
 
-    data = {
+    form_data = {
         'form_sent': '1',
         'referer': '',
         'next': '',
@@ -86,10 +86,13 @@ def post_login(account, password):
         'remember': '1'
     }
 
-    post_url = 'http://tinychat.com/login'
-    pr = _request_session.request(method='POST', url=post_url, data=data, headers=header, allow_redirects=False)
+    try:
+        post_url = 'http://tinychat.com/login'
+        pr = _request_session.request(method='POST', url=post_url, data=form_data, headers=header, allow_redirects=False)
 
-    return {'content': pr.text, 'cookies': pr.cookies, 'headers': pr.headers, 'status_code': pr.status_code}
+        return {'content': pr.text, 'cookies': pr.cookies, 'headers': pr.headers, 'status_code': pr.status_code}
+    except (requests.HTTPError, requests.RequestException):
+        return None
 
 
 def find_hashes(url, proxy=None):
@@ -102,9 +105,10 @@ def find_hashes(url, proxy=None):
     prohash = None
 
     html = get_request(url, proxy=proxy)
-    if ', autoop: "' in html['content']:
-        autoop = html['content'].split(', autoop: "')[1].split('"')[0]
-    if ', prohash: "' in html['content']:
-        prohash = html['content'].split(', prohash: "')[1].split('"')[0]
+    if html is not None:
+        if ', autoop: "' in html['content']:
+            autoop = html['content'].split(', autoop: "')[1].split('"')[0]
+        if ', prohash: "' in html['content']:
+            prohash = html['content'].split(', prohash: "')[1].split('"')[0]
 
-    return {'autoop': autoop, 'prohash': prohash}
+        return {'autoop': autoop, 'prohash': prohash}
