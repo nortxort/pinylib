@@ -569,12 +569,12 @@ class TinychatRTMPClient:
 
             elif msg_cmd[0] == '/mbpl':
                 media_type = msg_cmd[1]
-                time_point = int(round(msg_cmd[2]))
+                time_point = int(msg_cmd[2])
                 self.on_media_broadcast_play(media_type, time_point, msg_sender)
 
             elif msg_cmd[0] == '/mbsk':
                 media_type = msg_cmd[1]
-                time_point = int(round(msg_cmd[2]))
+                time_point = int(msg_cmd[2])
                 self.on_media_broadcast_skip(media_type, time_point, msg_sender)
         else:
             self.message_handler(msg_sender, msg.strip())
