@@ -288,6 +288,9 @@ class TinychatBot(tinychat.TinychatRTMPClient):
 
             elif cmd == OPTIONS['prefix'] + 'skip':
                 self.do_skip()
+                
+            elif cmd == OPTIONS['prefix'] + 'del':  # NEW
+                self.do_delete_playlist_item(cmd_arg)
 
             elif cmd == OPTIONS['prefix'] + 'rpl':
                 self.do_media_replay()
@@ -576,6 +579,29 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     self.inowplay += 1  # prepare the next tune in the playlist.
             else:
                 self.send_bot_msg('*No tunes to skip. The playlist is empty.*', self.is_client_mod)
+                
+    def do_delete_playlist_item(self, to_delete):  # NEW
+        """
+        Delete item(s) from the playlist by index.
+        :param to_delete: str index(es) to delete.
+        """
+        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+            try:
+                indexes = map(int, to_delete.split(','))
+            except ValueError:
+                self.send_bot_msg('Command example: *' +
+                                  OPTIONS['prefix'] + 'del 2* or *' + OPTIONS['prefix'] + 'del 1,2,5*',
+                                  self.is_client_mod)
+            else:
+                if len(self.playlist) is not 0:
+                    deleted_indexes = []
+                    for i in sorted(indexes, reverse=True):
+                        if i < len(self.playlist):
+                            del self.playlist[i]
+                            deleted_indexes.append(str(i))
+                    self.send_bot_msg('*Deleted track(s) at index:* ' + ','.join(deleted_indexes), self.is_client_mod)
+                else:
+                    self.send_bot_msg('The playlist is empty, no tracks to delete.', self.is_client_mod)
 
     def do_media_replay(self):  # NEW
         """ Replays the last played media."""
@@ -880,7 +906,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                                 self.playlist.append(self.search_list[index_choice])
                                 v_time = self.to_human_time(self.search_list[index_choice]['video_time'])
                                 v_title = self.search_list[index_choice]['video_title']
-                                self.send_bot_msg('*Added:* ' + v_title + ' *to playlist.* ' + v_time)
+                                self.send_bot_msg('*(' + str(len(self.playlist) - 1) + ') Added:* ' +
+                                                  v_title + ' *to playlist.* ' + v_time)
                             else:
                                 self.last_played_media = self.search_list[index_choice]
                                 self.send_media_broadcast_start(self.search_list[index_choice]['type'],
@@ -961,9 +988,10 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     self.send_bot_msg('Could not find video: ' + search_str, self.is_client_mod)
                 else:
                     if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
-                        self.send_bot_msg('*Added:* ' + _youtube['video_title'] + ' *to playlist.* ' +
-                                          self.to_human_time(_youtube['video_time']), self.is_client_mod)
                         self.playlist.append(_youtube)
+                        self.send_bot_msg('*(' + str(len(self.playlist) - 1) + ') Added:* ' + _youtube['video_title'] +
+                                          ' *to playlist.* ' + self.to_human_time(_youtube['video_time']),
+                                          self.is_client_mod)
                     else:
                         self.last_played_media = _youtube
                         self.send_media_broadcast_start(_youtube['type'], _youtube['video_id'])
@@ -1004,9 +1032,10 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                     self.send_bot_msg('Could not find soundcloud: ' + search_str, self.is_client_mod)
                 else:
                     if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
-                        self.send_bot_msg('*Added:* ' + _soundcloud['video_title'] + ' *to playlist.* ' +
-                                          self.to_human_time(_soundcloud['video_time']), self.is_client_mod)
                         self.playlist.append(_soundcloud)
+                        self.send_bot_msg('*(' + str(len(self.playlist) - 1) + ') Added:* ' +
+                                          _soundcloud['video_title'] + ' *to playlist.* ' +
+                                          self.to_human_time(_soundcloud['video_time']), self.is_client_mod)
                     else:
                         self.last_played_media = _soundcloud
                         self.send_media_broadcast_start(_soundcloud['type'], _soundcloud['video_id'])
