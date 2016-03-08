@@ -148,29 +148,30 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param video_id: str the youtube ID or souncloud track ID.
         :param usr_nick: str the user name of the user playing media.
         """
-        self.cancel_media_event_timer()
-
-        # are we in pause state?
-        if 'pause' in self.last_played_media:
-            # delete pause time point.
-            del self.last_played_media['pause']
-
-        video_time = 0
-
-        if media_type == 'youTube':
-            _youtube = youtube.youtube_time(video_id, check=False)
-            if _youtube is not None:
-                self.last_played_media = _youtube
-                video_time = _youtube['video_time']
-
-        elif media_type == 'soundCloud':
-            _soundcloud = soundcloud.soundcloud_track_info(video_id)
-            if _soundcloud is not None:
-                self.last_played_media = _soundcloud
-                video_time = _soundcloud['video_time']
-
-        self.media_event_timer(video_time)
-        self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' is playing ' + media_type + ' ' + video_id)
+        if self.user_obj.is_mod:
+            self.cancel_media_event_timer()
+    
+            # are we in pause state?
+            if 'pause' in self.last_played_media:
+                # delete pause time point.
+                del self.last_played_media['pause']
+    
+            video_time = 0
+    
+            if media_type == 'youTube':
+                _youtube = youtube.youtube_time(video_id, check=False)
+                if _youtube is not None:
+                    self.last_played_media = _youtube
+                    video_time = _youtube['video_time']
+    
+            elif media_type == 'soundCloud':
+                _soundcloud = soundcloud.soundcloud_track_info(video_id)
+                if _soundcloud is not None:
+                    self.last_played_media = _soundcloud
+                    video_time = _soundcloud['video_time']
+    
+            self.media_event_timer(video_time)
+            self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' is playing ' + media_type + ' ' + video_id)
 
     def on_media_broadcast_close(self, media_type, usr_nick):
         """
@@ -178,12 +179,13 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param media_type: str the type of media. youTube or soundCloud.
         :param usr_nick: str the user name of the user closing the media.
         """
-        self.cancel_media_event_timer()
-        # are we in pause state?
-        if 'pause' in self.last_played_media:
-            # delete pause time point.
-            del self.last_played_media['pause']
-        self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' closed the ' + media_type)
+        if self.user_obj.is_mod:
+            self.cancel_media_event_timer()
+            # are we in pause state?
+            if 'pause' in self.last_played_media:
+                # delete pause time point.
+                del self.last_played_media['pause']
+            self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' closed the ' + media_type)
 
     def on_media_broadcast_paused(self, media_type, usr_nick):
         """
@@ -191,16 +193,17 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param media_type: str the type of media being paused. youTube or soundCloud.
         :param usr_nick: str the user name of the user pausing the media.
         """
-        self.cancel_media_event_timer()
-        # are we in pause state already?
-        if 'pause' in self.last_played_media:
-            # if so delete old pause timepoint.
-            del self.last_played_media['pause']
-        # make a new pause timepoint.
-        ts_now = int(tinychat.time.time() * 1000)
-        self.last_played_media['pause'] = ts_now - self.media_start_time
-
-        self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' paused the ' + media_type)
+        if self.user_obj.is_mod:
+            self.cancel_media_event_timer()
+            # are we in pause state already?
+            if 'pause' in self.last_played_media:
+                # if so delete old pause timepoint.
+                del self.last_played_media['pause']
+            # make a new pause timepoint.
+            ts_now = int(tinychat.time.time() * 1000)
+            self.last_played_media['pause'] = ts_now - self.media_start_time
+    
+            self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' paused the ' + media_type)
 
     def on_media_broadcast_play(self, media_type, time_point, usr_nick):
         """
@@ -209,18 +212,19 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param time_point: int the time point in the tune in milliseconds.
         :param usr_nick: str the user resuming the tune.
         """
-        self.cancel_media_event_timer()
-        new_media_time = self.last_played_media['video_time'] - time_point
-        self.media_start_time = new_media_time
-
-        # are we in pause state?
-        if 'pause' in self.last_played_media:
-            # delete pause time point.
-            del self.last_played_media['pause']
-
-        self.media_event_timer(new_media_time)
-        self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' resumed the ' +
-                           media_type + ' at: ' + self.to_human_time(time_point))
+        if self.user_obj.is_mod:
+            self.cancel_media_event_timer()
+            new_media_time = self.last_played_media['video_time'] - time_point
+            self.media_start_time = new_media_time
+    
+            # are we in pause state?
+            if 'pause' in self.last_played_media:
+                # delete pause time point.
+                del self.last_played_media['pause']
+    
+            self.media_event_timer(new_media_time)
+            self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' resumed the ' +
+                               media_type + ' at: ' + self.to_human_time(time_point))
 
     def on_media_broadcast_skip(self, media_type, time_point, usr_nick):
         """
@@ -229,16 +233,17 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param time_point: int the time point in the tune in milliseconds.
         :param usr_nick: str the user time searching the tune.
         """
-        self.cancel_media_event_timer()
-        new_media_time = self.last_played_media['video_time'] - time_point
-        self.media_start_time = new_media_time
-
-        if 'pause' in self.last_played_media:
-            self.last_played_media['pause'] = new_media_time
-
-        self.media_event_timer(new_media_time)
-        self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' time searched the ' +
-                           media_type + ' at: ' + self.to_human_time(time_point))
+        if self.user_obj.is_mod:
+            self.cancel_media_event_timer()
+            new_media_time = self.last_played_media['video_time'] - time_point
+            self.media_start_time = new_media_time
+    
+            if 'pause' in self.last_played_media:
+                self.last_played_media['pause'] = new_media_time
+    
+            self.media_event_timer(new_media_time)
+            self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' time searched the ' +
+                               media_type + ' at: ' + self.to_human_time(time_point))
 
     def message_handler(self, msg_sender, msg):
         """
