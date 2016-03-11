@@ -44,6 +44,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
     last_played_media = {}      # NEW
     media_start_time = 0        # NEW
     media_timer_thread = None   # NEW
+    is_mod_playing = False      # NEW
 
     def on_join(self, join_info_dict):
         user = self.add_user_info(join_info_dict['nick'])
@@ -131,12 +132,12 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                             else:
                                 self.send_bot_msg('*Welcome* ' + new + ':' + str(uid), self.is_client_mod)
 
-                        if len(self.playlist) is not 0:
-                            # Play the media at the correct start time.
-                            self.send_media_broadcast_start(self.last_played_media['type'],
-                                                            self.last_played_media['video_id'],
-                                                            time_point=self.current_media_time_point(),
-                                                            private_nick=new)
+                        if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
+                            if not self.is_mod_playing:
+                                self.send_media_broadcast_start(self.last_played_media['type'],
+                                                                self.last_played_media['video_id'],
+                                                                time_point=self.current_media_time_point(),
+                                                                private_nick=new)
 
         self.console_write(tinychat.COLOR['bright_cyan'], old + ':' + str(uid) + ' changed nick to: ' + new)
 
@@ -149,6 +150,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         :param usr_nick: str the user name of the user playing media.
         """
         if self.user_obj.is_mod:
+            self.is_mod_playing = True
             self.cancel_media_event_timer()
     
             # are we in pause state?
@@ -244,6 +246,23 @@ class TinychatBot(tinychat.TinychatRTMPClient):
             self.media_event_timer(new_media_time)
             self.console_write(tinychat.COLOR['bright_magenta'], usr_nick + ' time searched the ' +
                                media_type + ' at: ' + self.to_human_time(time_point))
+                               
+    # Media Message Method.
+    def send_media_broadcast_start(self, media_type, video_id, time_point=0, private_nick=None):  # NEW
+        """
+        Starts a media broadcast.
+        NOTE: This method replaces play_youtube and play_soundcloud
+        :param media_type: str 'youTube' or 'soundCloud'
+        :param video_id: str the media video ID.
+        :param time_point: int where to start the media from in milliseconds.
+        :param private_nick: str if not None, start the media broadcast for this username only.
+        """
+        mbs_msg = '/mbs %s %s %s' % (media_type, video_id, time_point)
+        if private_nick is not None:
+            self.send_undercover_msg(private_nick, mbs_msg)
+        else:
+            self.is_mod_playing = False
+            self.send_chat_msg(mbs_msg)
 
     def message_handler(self, msg_sender, msg):
         """
@@ -911,8 +930,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                                 self.playlist.append(self.search_list[index_choice])
                                 v_time = self.to_human_time(self.search_list[index_choice]['video_time'])
                                 v_title = self.search_list[index_choice]['video_title']
-                                self.send_bot_msg('*(' + str(len(self.playlist) - 1) + ') Added:* ' +
-                                                  v_title + ' *to playlist.* ' + v_time)
+                                self.send_bot_msg('(' + str(len(self.playlist) - 1) + ') *' + v_title + '* ' +
+                                                  v_time, self.is_client_mod)
                             else:
                                 self.last_played_media = self.search_list[index_choice]
                                 self.send_media_broadcast_start(self.search_list[index_choice]['type'],
@@ -994,9 +1013,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 else:
                     if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
                         self.playlist.append(_youtube)
-                        self.send_bot_msg('*(' + str(len(self.playlist) - 1) + ') Added:* ' + _youtube['video_title'] +
-                                          ' *to playlist.* ' + self.to_human_time(_youtube['video_time']),
-                                          self.is_client_mod)
+                        self.send_bot_msg('(' + str(len(self.playlist) - 1) + ') *' + _youtube['video_title'] + '* ' +
+                                          self.to_human_time(_youtube['video_time']), self.is_client_mod)
                     else:
                         self.last_played_media = _youtube
                         self.send_media_broadcast_start(_youtube['type'], _youtube['video_id'])
@@ -1038,9 +1056,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
                 else:
                     if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
                         self.playlist.append(_soundcloud)
-                        self.send_bot_msg('*(' + str(len(self.playlist) - 1) + ') Added:* ' +
-                                          _soundcloud['video_title'] + ' *to playlist.* ' +
-                                          self.to_human_time(_soundcloud['video_time']), self.is_client_mod)
+                        self.send_bot_msg('(' + str(len(self.playlist) - 1) + ') *' + _soundcloud['video_title'] +
+                                          '* ' + self.to_human_time(_soundcloud['video_time']), self.is_client_mod)
                     else:
                         self.last_played_media = _soundcloud
                         self.send_media_broadcast_start(_soundcloud['type'], _soundcloud['video_id'])
