@@ -111,8 +111,8 @@ class TinychatRTMPClient:
         self.proxy = proxy
         self.greenroom = False
         self.prefix = u'tinychat'
-        self.swf_url = u'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0658.swf?version=1.0.0.0658/[[DYNAMIC]]/8'
-        self.desktop_version = u'Desktop 1.0.0.0658'
+        self.swf_url = u'http://tinychat.com/embed/Tinychat-11.1-1.0.0.0660.swf?version=1.0.0.0660/[[DYNAMIC]]/8'
+        self.desktop_version = u'Desktop 1.0.0.0660'
         self.embed_url = u'http://tinychat.com/' + self.roomname
         self.client_id = None
         self.connection = None
