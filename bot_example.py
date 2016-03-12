@@ -630,9 +630,7 @@ class TinychatBot(tinychat.TinychatRTMPClient):
     def do_media_replay(self):  # NEW
         """ Replays the last played media."""
         if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
-            if self.media_timer_thread is not None:
-                if self.media_timer_thread.is_alive():
-                    self.media_timer_thread.cancel()
+            self.cancel_media_event_timer()
             self.send_media_broadcast_start(self.last_played_media['type'], self.last_played_media['video_id'])
             self.media_event_timer(self.last_played_media['video_time'])
 
