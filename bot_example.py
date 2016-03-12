@@ -1527,8 +1527,8 @@ class TinychatBot(tinychat.TinychatRTMPClient):
         plstat = 'Use *' + OPTIONS['prefix'] + 'sc* soundcloud title or id to add or play soundcloud.'
         if len(self.playlist) is not 0:
             if self.inowplay + 1 < len(self.playlist):
-                next_video_title = self.playlist[self.inowplay + 1]['video_title']
-                next_video_time = self.to_human_time(self.playlist[self.inowplay + 1]['video_time'])
+                next_video_title = self.playlist[self.inowplay]['video_title']
+                next_video_time = self.to_human_time(self.playlist[self.inowplay]['video_time'])
                 upnext = '*Up next is:* ' + next_video_title + ' ' + next_video_time
             inquee = len(self.playlist) - self.inowplay
             plstat = str(len(self.playlist)) + ' *items in the playlist.* ' + str(inquee) + ' *Still in queue.*'
