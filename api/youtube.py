@@ -1,4 +1,8 @@
+import logging
 import web_request
+
+
+log = logging.getLogger(__name__)
 
 
 def youtube_search(search):
@@ -10,7 +14,7 @@ def youtube_search(search):
     and the resulting dict can be returned.
 
     :param search: The search term str to search for.
-    :return: dict['type=youtube', 'video_id', 'int(video_time)', 'video_title'] or None on error.
+    :return: dict{'type=youtube', 'video_id', 'int(video_time)', 'video_title'} or None on error.
     """
 
     if search:
@@ -32,7 +36,8 @@ def youtube_search(search):
                     if video_time is not None:
                         return {'type': 'youTube', 'video_id': video_id,
                                 'video_time': video_time['video_time'], 'video_title': video_title}
-            except KeyError:
+            except KeyError as ke:
+                log.error(ke, exc_info=True)
                 return None
     else:
         return None
@@ -69,9 +74,11 @@ def youtube_search_list(search, results=10):
                         if video_time is not None:
                             media_info = {'type': 'youTube', 'video_id': video_id,
                                           'video_time': video_time['video_time'], 'video_title': video_title}
+                            log.debug('Youtube item %s %s' % (i, media_info))
                             media_list.append(media_info)
                             i += 1
-            except KeyError:
+            except KeyError as ke:
+                log.error(ke, exc_info=True)
                 return None
     else:
         return None
@@ -82,7 +89,7 @@ def youtube_playlist_search(search, results=5):
     Searches youtube for a playlist matching the search term.
     :param search: str the search term to search to search for.
     :param results: int the number of playlist matches we want returned.
-    :return: list[ dict{'playlist_title', 'playlist_id'}] or None on failure.
+    :return: list[dict{'playlist_title', 'playlist_id'}] or None on failure.
     """
     if search:
         youtube_search_url = 'https://www.googleapis.com/youtube/v3/search?' \
@@ -100,7 +107,8 @@ def youtube_playlist_search(search, results=5):
                     play_lists.append(play_list_info)
                     if len(play_lists) == results:
                         return play_lists
-            except KeyError:
+            except KeyError as ke:
+                log.error(ke, exc_info=True)
                 return None
     else:
         return None
@@ -112,9 +120,8 @@ def youtube_playlist_videos(playlist_id):
 
     The list returned will contain a maximum of 50 videos.
     :param playlist_id: str the playlist ID
-    :return: list[ dict{'type=youTube', 'video_id', 'video_title', 'video_time'}] or None on failure.
+    :return: list[dict{'type=youTube', 'video_id', 'video_title', 'video_time'}] or None on failure.
     """
-    # key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg&playlistId=PLicWvCIV6DedrsSANN2_NifFlpiJm8FkM&maxResults=50&part=snippet,id&pageToken=CDIQAA
 
     playlist_details_url = 'https://www.googleapis.com/youtube/v3/playlistItems?' \
                            'key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg&playlistId=%s' \
@@ -135,7 +142,8 @@ def youtube_playlist_videos(playlist_id):
                             'video_title': video_title, 'video_time': video_time['video_time']}
                     video_list.append(info)
             return video_list
-        except KeyError:
+        except KeyError as ke:
+            log.error(ke, exc_info=True)
             return None
 
 
@@ -149,7 +157,7 @@ def youtube_time(video_id, check=True):
 
     :param check: bool True = checks region restriction. False = no check will be done
     :param video_id: The youtube video id str to check.
-    :return: dict['video_time', 'video_title'] or None
+    :return: dict['type=youTube', 'video_id', 'video_time', 'video_title'] or None
     """
 
     youtube_details_url = 'https://www.googleapis.com/youtube/v3/videos?' \
@@ -165,9 +173,11 @@ def youtube_time(video_id, check=True):
                     if 'regionRestriction' in contentdetails:
                         if 'blocked' in contentdetails['regionRestriction']:
                             if ('US' or 'DK' or 'PL') in contentdetails['regionRestriction']['blocked']:
+                                log.info('%s is blocked in: %s' % (video_id, contentdetails['regionRestriction']['blocked']))
                                 return None
                         if 'allowed' in contentdetails['regionRestriction']:
                             if ('US' or 'DK' or 'PL') not in contentdetails['regionRestriction']['allowed']:
+                                log.info('%s is allowed in: %s' % (video_id, contentdetails['regionRestriction']['allowed']))
                                 return None
 
                 video_time = convert_to_millisecond(contentdetails['duration'])
@@ -175,7 +185,8 @@ def youtube_time(video_id, check=True):
 
                 return {'type': 'youTube', 'video_id': video_id, 'video_time': video_time, 'video_title': video_title}
             return None
-        except KeyError:
+        except KeyError as ke:
+            log.error(ke, exc_info=True)
             return None
 
 
@@ -202,5 +213,4 @@ def convert_to_millisecond(duration):
             number_string = ''
         if char == 'S':
             seconds += int(number_string)
-    return (seconds * 1000)
-    
+    return seconds * 1000
