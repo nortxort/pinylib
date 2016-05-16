@@ -1345,7 +1345,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             elif pm_cmd == OPTIONS['prefix'] + 'noguest':
                 self.do_no_guest(pm_arg)
 
-            elif pm_cmd == OPTIONS['prefix'] + 'newusers':
+            elif pm_cmd == OPTIONS['prefix'] + 'newusers':  # NEW
                 self.do_newusers(pm_arg)
 
             elif pm_cmd == OPTIONS['prefix'] + 'skip':
