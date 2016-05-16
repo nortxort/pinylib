@@ -1,10 +1,18 @@
-# Source code taken from rtmpy project (http://rtmpy.org/):
-# rtmpy/protocol/handshake.py
-# rtmpy/protocol/rtmp/header.py
+"""
+Source code taken from rtmpy project (http://rtmpy.org/):
+rtmpy/protocol/handshake.py
+rtmpy/protocol/rtmp/header.py
 
+This is a edited version of rtmp-python based on the original by prekageo
+https://github.com/prekageo/rtmp-python
+"""
+import logging
 import time
 
 HANDSHAKE_LENGTH = 1536
+
+log = logging.getLogger(__name__)
+
 
 class Packet(object):
     """
@@ -36,23 +44,24 @@ class Packet(object):
 
         self.__dict__.update(kwargs)
 
-    def encode(self, buffer):
+    def encode(self, stream_buffer):
         """
         Encodes this packet to a stream.
         """
-        buffer.write_ulong(self.first or 0)
-        buffer.write_ulong(self.second or 0)
+        stream_buffer.write_ulong(self.first or 0)
+        stream_buffer.write_ulong(self.second or 0)
 
-        buffer.write(self.payload)
+        stream_buffer.write(self.payload)
 
-    def decode(self, buffer):
+    def decode(self, stream_buffer):
         """
         Decodes this packet from a stream.
         """
-        self.first = buffer.read_ulong()
-        self.second = buffer.read_ulong()
+        self.first = stream_buffer.read_ulong()
+        self.second = stream_buffer.read_ulong()
 
-        self.payload = buffer.read(HANDSHAKE_LENGTH - 8)
+        self.payload = stream_buffer.read(HANDSHAKE_LENGTH - 8)
+
 
 def header_decode(stream):
     """
@@ -66,18 +75,18 @@ def header_decode(stream):
     @return: The read header from the stream.
     @rtype: L{Header}
     """
-    # read the size and channelId
-    channelId = stream.read_uchar()
-    bits = channelId >> 6
-    channelId &= 0x3f
+    # read the size and channel_id
+    channel_id = stream.read_uchar()
+    bits = channel_id >> 6
+    channel_id &= 0x3f
 
-    if channelId == 0:
-        channelId = stream.read_uchar() + 64
+    if channel_id == 0:
+        channel_id = stream.read_uchar() + 64
 
-    if channelId == 1:
-        channelId = stream.read_uchar() + 64 + (stream.read_uchar() << 8)
+    if channel_id == 1:
+        channel_id = stream.read_uchar() + 64 + (stream.read_uchar() << 8)
 
-    header = Header(channelId)
+    header = Header(channel_id)
 
     if bits == 3:
         return header
@@ -85,13 +94,13 @@ def header_decode(stream):
     header.timestamp = stream.read_24bit_uint()
 
     if bits < 2:
-        header.bodyLength = stream.read_24bit_uint()
-        header.datatype = stream.read_uchar()
+        header.body_length = stream.read_24bit_uint()
+        header.data_type = stream.read_uchar()
 
     if bits < 1:
         # streamId is little endian
         stream.endian = '<'
-        header.streamId = stream.read_ulong()
+        header.stream_id = stream.read_ulong()
         stream.endian = '!'
 
         header.full = True
@@ -99,7 +108,9 @@ def header_decode(stream):
     if header.timestamp == 0xffffff:
         header.timestamp = stream.read_ulong()
 
+    log.info('header recv: %s' % header)
     return header
+
 
 def header_encode(stream, header, previous=None):
     """
@@ -111,33 +122,34 @@ def header_encode(stream, header, previous=None):
     it contains the size of the rest of the header as described in
     L{getHeaderSize}.
 
-    0 >= channelId > 64: channelId
-    64 >= channelId > 320: 0, channelId - 64
-    320 >= channelId > 0xffff + 64: 1, channelId - 64 (written as 2 byte int)
+    0 >= channel_id > 64: channel_id
+    64 >= channel_id > 320: 0, channel_id - 64
+    320 >= channel_id > 0xffff + 64: 1, channel_id - 64 (written as 2 byte int)
 
     @param stream: The stream to write the encoded header.
     @type stream: L{util.BufferedByteStream}
     @param header: The L{Header} to encode.
     @param previous: The previous header (if any).
     """
+    log.debug('header send: %s' % header)
     if previous is None:
         size = 0
     else:
         size = min_bytes_required(header, previous)
 
-    channelId = header.channelId
+    channel_id = header.channel_id
 
-    if channelId < 64:
-        stream.write_uchar(size | channelId)
-    elif channelId < 320:
+    if channel_id < 64:
+        stream.write_uchar(size | channel_id)
+    elif channel_id < 320:
         stream.write_uchar(size)
-        stream.write_uchar(channelId - 64)
+        stream.write_uchar(channel_id - 64)
     else:
-        channelId -= 64
+        channel_id -= 64
 
         stream.write_uchar(size + 1)
-        stream.write_uchar(channelId & 0xff)
-        stream.write_uchar(channelId >> 0x08)
+        stream.write_uchar(channel_id & 0xff)
+        stream.write_uchar(channel_id >> 0x08)
 
     if size == 0xc0:
         return
@@ -149,33 +161,34 @@ def header_encode(stream, header, previous=None):
             stream.write_24bit_uint(header.timestamp)
 
     if size <= 0x40:
-        stream.write_24bit_uint(header.bodyLength)
-        stream.write_uchar(header.datatype)
+        stream.write_24bit_uint(header.body_length)
+        stream.write_uchar(header.data_type)
 
     if size == 0:
         stream.endian = '<'
-        stream.write_ulong(header.streamId)
+        stream.write_ulong(header.stream_id)
         stream.endian = '!'
 
     if size <= 0x80:
         if header.timestamp >= 0xffffff:
             stream.write_ulong(header.timestamp)
 
+
 class Header(object):
     """
     An RTMP Header. Holds contextual information for an RTMP Channel.
     """
 
-    __slots__ = ('streamId', 'datatype', 'timestamp', 'bodyLength',
-        'channelId', 'full')
+    __slots__ = ('stream_id', 'data_type', 'timestamp',
+                 'body_length', 'channel_id', 'full')
 
-    def __init__(self, channelId, timestamp=-1, datatype=-1,
-                 bodyLength=-1, streamId=-1, full=False):
-        self.channelId = channelId
+    def __init__(self, channel_id, timestamp=-1, data_type=-1,
+                 body_length=-1, stream_id=-1, full=False):
+        self.channel_id = channel_id
         self.timestamp = timestamp
-        self.datatype = datatype
-        self.bodyLength = bodyLength
-        self.streamId = streamId
+        self.data_type = data_type
+        self.body_length = body_length
+        self.stream_id = stream_id
         self.full = full
 
     def __repr__(self):
@@ -195,6 +208,7 @@ class Header(object):
             ' '.join(attrs),
             id(self))
 
+
 def min_bytes_required(old, new):
     """
     Returns the number of bytes needed to de/encode the header based on the
@@ -208,14 +222,13 @@ def min_bytes_required(old, new):
     if old is new:
         return 0xc0
 
-    if old.channelId != new.channelId:
-        raise HeaderError('channelId mismatch on diff old=%r, new=%r' % (
-            old, new))
+    if old.channel_id != new.channel_id:
+        raise Exception('HeaderError: channel_id mismatch on diff old=%r, new=%r' % (old, new))
 
-    if old.streamId != new.streamId:
-        return 0 # full header
+    if old.stream_id != new.stream_id:
+        return 0  # full header
 
-    if old.datatype == new.datatype and old.bodyLength == new.bodyLength:
+    if old.data_type == new.data_type and old.body_length == new.body_length:
         if old.timestamp == new.timestamp:
             return 0xc0
 
