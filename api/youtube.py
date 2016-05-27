@@ -1,6 +1,8 @@
 import logging
 import web_request
 
+# Youtube API key.
+YOUTUBE_API_KEY = 'AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg'
 
 log = logging.getLogger(__name__)
 
@@ -16,13 +18,11 @@ def youtube_search(search):
     :param search: The search term str to search for.
     :return: dict{'type=youtube', 'video_id', 'int(video_time)', 'video_title'} or None on error.
     """
-
     if search:
         if 'list' in search:
             search = search.split('?list')[0]
         youtube_search_url = 'https://www.googleapis.com/youtube/v3/search?' \
-                             'type=video&key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg' \
-                             '&maxResults=50&q=%s&part=snippet' % search
+                             'type=video&key=%s&maxResults=50&q=%s&part=snippet' % (YOUTUBE_API_KEY, search)
 
         api_response = web_request.get_request(youtube_search_url, json=True)
 
@@ -55,8 +55,7 @@ def youtube_search_list(search, results=10):
     """
     if search:
         youtube_search_url = 'https://www.googleapis.com/youtube/v3/search?type=video' \
-                             '&key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg' \
-                             '&maxResults=50&q=%s&part=snippet' % search
+                             '&key=%s&maxResults=50&q=%s&part=snippet' % (YOUTUBE_API_KEY, search)
 
         api_response = web_request.get_request(youtube_search_url, json=True)
         if api_response is not None:
@@ -64,7 +63,7 @@ def youtube_search_list(search, results=10):
             try:
                 i = 0
                 for item in api_response['content']['items']:
-                    if i == results:  # if i >= results:
+                    if i == results:
                         return media_list
                     else:
                         video_id = item['id']['videoId']
@@ -93,8 +92,7 @@ def youtube_playlist_search(search, results=5):
     """
     if search:
         youtube_search_url = 'https://www.googleapis.com/youtube/v3/search?' \
-                             'type=playlist&key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg' \
-                             '&maxResults=50&q=%s&part=snippet' % search
+                             'type=playlist&key=%s&maxResults=50&q=%s&part=snippet' % (YOUTUBE_API_KEY, search)
 
         api_response = web_request.get_request(youtube_search_url, json=True)
         if api_response is not None:
@@ -122,15 +120,12 @@ def youtube_playlist_videos(playlist_id):
     :param playlist_id: str the playlist ID
     :return: list[dict{'type=youTube', 'video_id', 'video_title', 'video_time'}] or None on failure.
     """
-
     playlist_details_url = 'https://www.googleapis.com/youtube/v3/playlistItems?' \
-                           'key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg&playlistId=%s' \
-                           '&maxResults=50&part=snippet,id' % playlist_id
+                           'key=%s&playlistId=%s&maxResults=50&part=snippet,id' % (YOUTUBE_API_KEY, playlist_id)
 
     api_response = web_request.get_request(playlist_details_url, json=True)
     if api_response is not None:
         video_list = []
-        # next_page_token = api_response['content']['nextPageToken']
         try:
             for item in api_response['content']['items']:
                 video_id = item['snippet']['resourceId']['videoId']
@@ -157,11 +152,10 @@ def youtube_time(video_id, check=True):
 
     :param check: bool True = checks region restriction. False = no check will be done
     :param video_id: The youtube video id str to check.
-    :return: dict['type=youTube', 'video_id', 'video_time', 'video_title'] or None
+    :return: dict{'type=youTube', 'video_id', 'video_time', 'video_title'} or None
     """
-
     youtube_details_url = 'https://www.googleapis.com/youtube/v3/videos?' \
-                          'id=%s&key=AIzaSyCPQe4gGZuyVQ78zdqf9O5iEyfVLPaRwZg&part=contentDetails,snippet' % video_id
+                          'id=%s&key=%s&part=contentDetails,snippet' % (video_id, YOUTUBE_API_KEY)
 
     api_response = web_request.get_request(youtube_details_url, json=True)
 
