@@ -602,34 +602,3 @@ class RtmpClient:
             return
         so.use(self.reader, self.writer)
         self.shared_objects.append(so)
-
-    def handle_messages(self):
-        """ Start the message handling loop. """
-        while True:
-            msg = self.reader.next()
-
-            handled = self.handle_simple_message(msg)
-
-            if handled:
-                continue
-
-            for so in self.shared_objects:
-                if so.handle_message(msg):
-                    handled = True
-                    break
-            if not handled:
-                assert False, msg
-
-    def handle_simple_message(self, msg):
-        """ Handle simple messages, e.g. ping requests from server to client. """
-        if msg['msg'] == data_types.USER_CONTROL and msg['event_type'] == user_control_types.PING_REQUEST:
-            resp = {
-                'msg': data_types.USER_CONTROL,
-                'event_type': user_control_types.PING_RESPONSE,
-                'event_data': msg['event_data'],
-            }
-            self.writer.write(resp)
-            self.writer.flush()
-            return True
-
-        return False
