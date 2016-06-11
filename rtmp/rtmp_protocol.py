@@ -536,7 +536,7 @@ class RtmpClient:
             assert amf_data['limit_type'] == 2, amf_data
             return True
 
-        elif amf_data['msg'] == data_types.USER_CONTROL:
+        elif amf_data['msg'] == data_types.USER_CONTROL and amf_data['event_type'] == user_control_types.STREAM_BEGIN:
             assert amf_data['event_type'] == user_control_types.STREAM_BEGIN, amf_data
             assert amf_data['event_data'] == '\x00\x00\x00\x00', amf_data
             return True
