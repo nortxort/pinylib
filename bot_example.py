@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """ Tinychat bot example by Nortxort (https://github.com/nortxort/pinylib). """
 
 import re
@@ -6,12 +7,15 @@ import threading
 import logging
 
 import pinylib
-from api import soundcloud, youtube, other_apis, lastfm
+from api import soundcloud, youtube, other_apis, lastfm, privacy_settings
+
+__version__ = 3.6
 
 #  Bot Settings.
 OPTIONS = {
     'prefix': '!',                                  # Command prefix.
-    'key': '87df7gd',                               # unique secret key.
+    'key': 'yusd87f',                               # unique secret key.
+    'super_key': '87sdysd7s',                       # VERY unique super mod key. NEW
     'auto_message_enabled': True,                   # enable auto message sender.
     'debug_to_file': False,                         # log debug info to file.
     'auto_message_interval': 300,                   # auto message sender interval in seconds.
@@ -21,7 +25,6 @@ OPTIONS = {
     'debug_file_name': 'bot_example_debug.log'      # debug file name.
 }
 
-__version__ = 3.4
 log = logging.getLogger(__name__)
 
 
@@ -40,19 +43,21 @@ def eightball():
 
 class TinychatBot(pinylib.TinychatRTMPClient):
     """ Overrides event methods in TinychatRTMPClient that the client should to react to. """
-    key = OPTIONS['key']
-    is_newuser_allowed = True  # NEW
-    no_cam = False
-    no_guests = False
     init_time = pinylib.time.time()
+    key = OPTIONS['key']
+    is_newusers_allowed = True
+    is_broadcasting_allowed = True  # RENAMED/DEFAULT VALUE CHANGED
+    is_guest_entry_allowed = True  # RENAMED/DEFAULT VALUE CHANGED
+    is_guest_nicks_allowed = False  # NEW/ISSUE #24
+    privacy_settings = object  # NEW
     # Media Player Related.
+    is_mod_playing = False
     playlist = []
     search_list = []
     inowplay = 0
     last_played_media = {}
     media_start_time = 0
     media_timer_thread = None
-    is_mod_playing = False
 
     def on_join(self, join_info_dict):
         log.info('User join info: %s' % join_info_dict)
@@ -69,14 +74,14 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 user.tinychat_id = tc_info['tinychat_id']
                 user.last_login = tc_info['last_active']
             if join_info_dict['own']:
-                self.console_write(pinylib.COLOR['red'], 'Room Owner ' + join_info_dict['nick'] +
-                                   ':' + str(join_info_dict['id']) + ':' + join_info_dict['account'])
+                self.console_write(pinylib.COLOR['red'], 'Room Owner %s:%d:%s' %
+                                   (join_info_dict['nick'], join_info_dict['id'], join_info_dict['account']))
             elif join_info_dict['mod']:
-                self.console_write(pinylib.COLOR['bright_red'], 'Moderator ' + join_info_dict['nick'] +
-                                   ':' + str(join_info_dict['id']) + ':' + join_info_dict['account'])
+                self.console_write(pinylib.COLOR['bright_red'], 'Moderator %s:%d:%s' %
+                                   (join_info_dict['nick'], join_info_dict['id'], join_info_dict['account']))
             else:
-                self.console_write(pinylib.COLOR['bright_yellow'], join_info_dict['nick'] +
-                                   ':' + str(join_info_dict['id']) + ' Has account: ' + join_info_dict['account'])
+                self.console_write(pinylib.COLOR['bright_yellow'], '%s:%d has account: %s' %
+                                   (join_info_dict['nick'], join_info_dict['id'], join_info_dict['account']))
 
                 badaccounts = pinylib.fh.file_reader(self.config_path(), OPTIONS['badaccounts'])
                 if badaccounts is not None:
@@ -87,43 +92,32 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                             self.send_bot_msg('*Auto-Banned:* (bad account)', self.is_client_mod)
         else:
             if join_info_dict['id'] is not self.client_id:
-                if self.no_guests:
+                if not self.is_guest_entry_allowed:
                     self.send_ban_msg(join_info_dict['nick'], join_info_dict['id'])
                     # remove next line to ban.
                     self.send_forgive_msg(join_info_dict['id'])
                     self.send_bot_msg('*Auto-Banned:* (guests not allowed)', self.is_client_mod)
                 else:
-                    self.console_write(pinylib.COLOR['cyan'], join_info_dict['nick'] +
-                                       ':' + str(join_info_dict['id']) + ' joined the room.')
+                    self.console_write(pinylib.COLOR['cyan'], '%s:%d joined the room.' %
+                                       (join_info_dict['nick'], join_info_dict['id']))
 
-    def on_joinsdone(self):
+    def on_joinsdone(self):  # EDITED
         if not self.is_reconnected:
             if OPTIONS['auto_message_enabled']:
                 self.start_auto_msg_timer()
         if self.is_client_mod:
             self.send_banlist_msg()
+        if self.is_client_owner and self._roomtype != 'default':
+            threading.Thread(target=self.get_privacy_settings).start()
 
     def on_avon(self, uid, name):  # EDITED
-        if self.no_cam:
+        if not self.is_broadcasting_allowed:
             self.send_close_user_msg(name)
+            self.console_write(pinylib.COLOR['cyan'], 'Auto closed broadcast %s:%s' % (name, uid))
         else:
-            uid_parts = str(uid).split(':')
-            if len(uid_parts) is 2:
-                clean_uid = uid_parts[0]
-                user_device = u'' + uid_parts[1]
-                if user_device == 'android':
-                    self.console_write(pinylib.COLOR['cyan'], name + ':' + str(clean_uid) +
-                                       ' is broadcasting from a android device.')
-                elif user_device == 'ios':
-                    self.console_write(pinylib.COLOR['cyan'], name + ':' + str(clean_uid) +
-                                       ' is broadcasting from a ios device.')
-                else:
-                    self.console_write(pinylib.COLOR['cyan'], name + ':' + str(clean_uid) +
-                                       ' is broadcasting from unknown device ' + user_device)
-            else:
-                self.console_write(pinylib.COLOR['cyan'], name + ':' + uid + ' is broadcasting.')
+            self.console_write(pinylib.COLOR['cyan'], '%s:%s is broadcasting.' % (name, uid))
 
-    def on_nick(self, old, new, uid):
+    def on_nick(self, old, new, uid):  # EDITED
         old_info = self.find_user_info(old)
         old_info.nick = new
         if old in self.room_users.keys():
@@ -135,14 +129,15 @@ class TinychatBot(pinylib.TinychatRTMPClient):
 
                 if str(new).startswith('guest-'):
                     if self.is_client_mod:
-                        self.send_ban_msg(new, uid)
-                        # remove next line to ban.
-                        self.send_forgive_msg(uid)
-                        self.send_bot_msg('*Auto-Banned:* (bot nick detected)', self.is_client_mod)
+                        if not self.is_guest_nicks_allowed:
+                            self.send_ban_msg(new, uid)
+                            # remove next line to ban.
+                            self.send_forgive_msg(uid)
+                            self.send_bot_msg('*Auto-Banned:* (bot nick detected)', self.is_client_mod)
 
                 if str(new).startswith('newuser'):
                     if self.is_client_mod:
-                        if not self.is_newuser_allowed:
+                        if not self.is_newusers_allowed:
                             self.send_ban_msg(new, uid)
                             # remove next line to ban.
                             self.send_forgive_msg(uid)
@@ -173,7 +168,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                                                                 self.last_played_media['video_id'],
                                                                 time_point=self.current_media_time_point(),
                                                                 private_nick=new)
-        self.console_write(pinylib.COLOR['bright_cyan'], old + ':' + str(uid) + ' changed nick to: ' + new)
+        self.console_write(pinylib.COLOR['bright_cyan'], '%s:%s changed nick to: %s' % (old, uid, new))
 
     # Media Events.
     def on_media_broadcast_start(self, media_type, video_id, usr_nick):
@@ -207,8 +202,8 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     video_time = _soundcloud['video_time']
 
             self.media_event_timer(video_time)
-            self.console_write(pinylib.COLOR['bright_magenta'], usr_nick + ' is playing ' +
-                               media_type + ' ' + video_id)
+            self.console_write(pinylib.COLOR['bright_magenta'], '%s is playing %s %s' %
+                               (usr_nick, media_type, video_id))
 
     def on_media_broadcast_close(self, media_type, usr_nick):
         """
@@ -222,7 +217,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             if 'pause' in self.last_played_media:
                 # delete pause time point.
                 del self.last_played_media['pause']
-            self.console_write(pinylib.COLOR['bright_magenta'], usr_nick + ' closed the ' + media_type)
+            self.console_write(pinylib.COLOR['bright_magenta'], '%s closed the %s' % (usr_nick, media_type))
 
     def on_media_broadcast_paused(self, media_type, usr_nick):
         """
@@ -240,7 +235,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             ts_now = int(pinylib.time.time() * 1000)
             self.last_played_media['pause'] = ts_now - self.media_start_time
 
-            self.console_write(pinylib.COLOR['bright_magenta'], usr_nick + ' paused the ' + media_type)
+            self.console_write(pinylib.COLOR['bright_magenta'], '%s paused the %s' % (usr_nick, media_type))
 
     def on_media_broadcast_play(self, media_type, time_point, usr_nick):
         """
@@ -260,8 +255,8 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 del self.last_played_media['pause']
 
             self.media_event_timer(new_media_time)
-            self.console_write(pinylib.COLOR['bright_magenta'], usr_nick + ' resumed the ' +
-                               media_type + ' at: ' + self.to_human_time(time_point))
+            self.console_write(pinylib.COLOR['bright_magenta'], '%s resumed the %s at: %s' %
+                               (usr_nick, media_type, self.to_human_time(time_point)))
 
     def on_media_broadcast_skip(self, media_type, time_point, usr_nick):
         """
@@ -279,8 +274,8 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 self.last_played_media['pause'] = new_media_time
 
             self.media_event_timer(new_media_time)
-            self.console_write(pinylib.COLOR['bright_magenta'], usr_nick + ' time searched the ' +
-                               media_type + ' at: ' + self.to_human_time(time_point))
+            self.console_write(pinylib.COLOR['bright_magenta'], '%s time searched the %s at: %s' %
+                               (usr_nick, media_type, self.to_human_time(time_point)))
 
     # Media Message Method.
     def send_media_broadcast_start(self, media_type, video_id, time_point=0, private_nick=None):
@@ -302,9 +297,9 @@ class TinychatBot(pinylib.TinychatRTMPClient):
     # Message Method.
     def send_bot_msg(self, msg, is_mod=False):
         """
-
-        :param msg:
-        :param is_mod:
+        Send a chat message to the room.
+        :param msg: str the message to send.
+        :param is_mod: boolean True send a owner run message, False send a normal chat message.
         """
         if is_mod:
             self.send_owner_run_msg(msg)
@@ -329,8 +324,27 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             # The rest is a command argument.
             cmd_arg = ' '.join(parts[1:]).strip()
 
-            # Owner commands.
-            if cmd == OPTIONS['prefix'] + 'kill':
+            # Super mod commands.
+            if cmd == OPTIONS['prefix'] + 'mod':  # NEW
+                threading.Thread(target=self.do_make_mod, args=(cmd_arg, )).start()
+
+            elif cmd == OPTIONS['prefix'] + 'rmod':  # NEW
+                threading.Thread(target=self.do_remove_mod, args=(cmd_arg, )).start()
+
+            elif cmd == OPTIONS['prefix'] + 'dir':  # NEW
+                threading.Thread(target=self.do_directory).start()
+
+            elif cmd == OPTIONS['prefix'] + 'p2t':  # NEW
+                threading.Thread(target=self.do_push2talk).start()
+
+            elif cmd == OPTIONS['prefix'] + 'gr':  # NEW
+                threading.Thread(target=self.do_green_room).start()
+
+            elif cmd == OPTIONS['prefix'] + 'crb':  # NEW
+                threading.Thread(target=self.do_clear_room_bans).start()
+
+            # Owner and super mod commands.
+            elif cmd == OPTIONS['prefix'] + 'kill':
                 self.do_kill()
 
             elif cmd == OPTIONS['prefix'] + 'reboot':
@@ -414,7 +428,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 self.do_play_youtube_search(cmd_arg)
 
             # Public Commands.
-            elif cmd == OPTIONS['prefix'] + 'v':  # NEW
+            elif cmd == OPTIONS['prefix'] + 'v':
                 self.do_version()
 
             elif cmd == OPTIONS['prefix'] + 'help':
@@ -432,7 +446,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             elif cmd == OPTIONS['prefix'] + 'n':
                 self.do_next_tune_in_playlist()
 
-            elif cmd == OPTIONS['prefix'] + 'np':  # NEW
+            elif cmd == OPTIONS['prefix'] + 'np':
                 self.do_now_playing()
 
             elif cmd == OPTIONS['prefix'] + 'yt':
@@ -483,22 +497,91 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         # add msg to user object last_msg
         self.user_obj.last_msg = msg
 
-    # == Owner Only Command Methods. ==
-    def do_kill(self):
+    # == Super Mod Commands Methods. ==
+    def do_make_mod(self, account):  # NEW
+        """
+        Make a tinychat account a room moderator.
+        :param account str the account to make a moderator.
+        """
+        if self.is_client_owner:
+            if self.user_obj.is_super:
+                if len(account) is 0:
+                    self.send_bot_msg('*Missing account name.*', self.is_client_mod)
+                else:
+                    tc_user = self.privacy_settings.make_moderator(account)
+                    if tc_user is None:
+                        self.send_bot_msg('*The account is invalid.*', self.is_client_mod)
+                    elif not tc_user:
+                        self.send_bot_msg('*The account is already a moderator.*', self.is_client_mod)
+                    elif tc_user:
+                        self.send_bot_msg('*' + account + ' was made a room moderator.*', self.is_client_mod)
+
+    def do_remove_mod(self, account):  # NEW
+        """
+        Removes a tinychat account from the moderator list.
+        :param account str the account to remove from the moderator list.
+        """
+        if self.is_client_owner:
+            if self.user_obj.is_super:
+                if len(account) is 0:
+                    self.send_bot_msg('*Missing account name.*', self.is_client_mod)
+                else:
+                    tc_user = self.privacy_settings.remove_moderator(account)
+                    if tc_user:
+                        self.send_bot_msg('*' + account + ' is no longer a room moderator.*', self.is_client_mod)
+                    elif not tc_user:
+                        self.send_bot_msg('*' + account + ' is not a room moderator.*', self.is_client_mod)
+
+    def do_directory(self):  # NEW
+        """ Toggles if the room should be shown on the directory. """
+        if self.is_client_owner:
+            if self.user_obj.is_super:
+                if self.privacy_settings.show_on_directory():
+                    self.send_bot_msg('*Room IS shown on the directory.*', self.is_client_mod)
+                else:
+                    self.send_bot_msg('*Room is NOT shown on the directory.*', self.is_client_mod)
+
+    def do_push2talk(self):  # NEW
+        """ Toggles if the room should be in push2talk mode. """
+        if self.is_client_owner:
+            if self.user_obj.is_super:
+                if self.privacy_settings.set_push2talk():
+                    self.send_bot_msg('*Push2Talk is enabled.*', self.is_client_mod)
+                else:
+                    self.send_bot_msg('*Push2Talk is disabled.*', self.is_client_mod)
+
+    def do_green_room(self):  # NEW
+        """ Toggles if the room should be in greenroom mode. """
+        if self.is_client_owner:
+            if self.user_obj.is_super:
+                if self.privacy_settings.set_greenroom():
+                    self.send_bot_msg('*Green room is enabled.*', self.is_client_mod)
+                else:
+                    self.send_bot_msg('*Green room is disabled.*', self.is_client_mod)
+
+    def do_clear_room_bans(self):  # NEW
+        """ Clear all room bans. """
+        if self.is_client_owner:
+            if self.user_obj.is_super:
+                if self.privacy_settings.clear_bans():
+                    self.send_bot_msg('*All room bans was cleared.*', self.is_client_mod)
+
+    # == Owner And Super Mod Command Methods. ==
+    def do_kill(self):  # EDITED
         """ Kills the bot. """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             self.disconnect()
 
-    def do_reboot(self):
+    def do_reboot(self):  # EDITED
         """ Reboots the bot. """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             self.reconnect()
 
     # == Owner And Bot Controller Commands Methods. ==
-    def do_media_info(self):
+    def do_media_info(self):  # EDITED
         """ Shows basic media info. """
         # This method was used while debugging the media player, and doesnt serve a purpose.
-        if self.user_obj.is_owner or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super or self.user_obj.has_power:
             if self.is_client_mod:
                 self.send_owner_run_msg('*I Now Play:* ' + str(self.inowplay))
                 self.send_owner_run_msg('*Playlist Length:* ' + str(len(self.playlist)))
@@ -506,12 +589,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 self.send_owner_run_msg('*Active Threads:* ' + str(threading.active_count()))
                 self.send_owner_run_msg('*Is Mod Playing:* ' + str(self.is_mod_playing))
 
-    def do_lastfm_chart(self, chart_items):
+    def do_lastfm_chart(self, chart_items):  # EDITED
         """
         Makes a playlist from the currently most played tunes on last.fm
         :param chart_items: int the amount of tunes we want.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if chart_items is 0 or chart_items is None:
                     self.send_bot_msg('Please specify the amount of tunes you want.', self.is_client_mod)
@@ -544,12 +628,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                                 else:
                                     self.send_bot_msg('Failed to retrieve a result from last.fm.', self.is_client_mod)
 
-    def do_lastfm_random_tunes(self, max_tunes):
+    def do_lastfm_random_tunes(self, max_tunes):  # EDITED
         """
         Creates a playlist from what other people are listening to on last.fm.
         :param max_tunes: int the max amount of tunes.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if max_tunes is 0 or max_tunes is None:
                     self.send_bot_msg('Please specify the max amount of tunes you want.', self.is_client_mod)
@@ -582,12 +667,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                                 else:
                                     self.send_bot_msg('Failed to retrieve a result from last.fm.', self.is_client_mod)
 
-    def search_lastfm_by_tag(self, search_str):
+    def search_lastfm_by_tag(self, search_str):  # EDITED
         """
         Searches last.fm for tunes matching the search term and creates a playlist from them.
         :param search_str: str the search term to search for.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(search_str) is 0:
                     self.send_bot_msg('Missing search tag.', self.is_client_mod)
@@ -612,12 +698,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                         self.send_bot_msg('Failed to retrieve a result from last.fm.', self.is_client_mod)
 
     # == Mod And Bot Controller Command Methods. ==
-    def do_close_broadcast(self, user_name):
+    def do_close_broadcast(self, user_name):  # EDITED
         """
         Close a user broadcasting.
         :param user_name: str the username to close.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(user_name) is 0:
                     self.send_bot_msg('Missing username.', self.is_client_mod)
@@ -628,19 +715,21 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     else:
                         self.send_bot_msg('No user named: ' + user_name, self.is_client_mod)
 
-    def do_clear(self):
+    def do_clear(self):  # EDITED
         """ Clears the chatbox. """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 for x in range(0, 10):
                     self.send_owner_run_msg(' ')
             else:
                 clear = '133,133,133,133,133,133,133,133,133,133,133,133,133,133,133'
-                self._send_command('privmsg', [clear, pinylib.random_color() + ',en'])
+                self._send_command('privmsg', [clear, u'#262626,en'])
 
-    def do_skip(self):
+    def do_skip(self):  # EDITED
         """ Play the next item in the playlist. """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if len(self.playlist) is not 0:
                 if self.inowplay >= len(self.playlist):
                     self.send_bot_msg('*This is the last tune in the playlist.*', self.is_client_mod)
@@ -661,11 +750,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         """
         usage = '*' + OPTIONS['prefix'] + 'del 1* or *' + OPTIONS['prefix'] + 'del 1,2,4* or *' \
                 + OPTIONS['prefix'] + 'del 2:8*'
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
+            if len(self.playlist) is 0:
+                self.send_undercover_msg(self.user_obj.nick, 'The playlist is empty.')
             if len(to_delete) is 0:
                 self.send_undercover_msg(self.user_obj.nick, usage)
-            if len(self.playlist) is 0:
-                self.send_undercover_msg(self.user_obj.nick, usage + ' -> 2')
             else:
                 indexes = None
                 deleted_by_range = False
@@ -706,11 +797,11 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                         deleted_indexes.reverse()
                         if len(deleted_indexes) > 0:
                             if deleted_by_range:
-                                self.send_bot_msg('*deleted index range from(and including)* ' +
+                                self.send_bot_msg('*deleted: index range from(and including)* ' +
                                                   str(deleted_indexes[0]) + ' to ' + str(deleted_indexes[-1]),
                                                   self.is_client_mod)
                             elif len(deleted_indexes) is 1:
-                                self.send_bot_msg('Deleted *' + playlist_copy[int(deleted_indexes[0])]['video_title'] +
+                                self.send_bot_msg('Deleted: *' + playlist_copy[int(deleted_indexes[0])]['video_title'] +
                                                   '*', self.is_client_mod)
                             else:
                                 self.send_bot_msg('*Deleted tracks at index:* ' + ', '.join(deleted_indexes),
@@ -720,23 +811,26 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     else:
                         self.send_bot_msg('The playlist is empty, no tracks to delete.', self.is_client_mod)
 
-    def do_media_replay(self):
+    def do_media_replay(self):  # EDITED
         """ Replays the last played media."""
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             self.cancel_media_event_timer()
             self.send_media_broadcast_start(self.last_played_media['type'], self.last_played_media['video_id'])
             self.media_event_timer(self.last_played_media['video_time'])
 
-    def do_close_media(self):
+    def do_close_media(self):  # EDITED
         """ Closes the active media broadcast."""
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
                 self.cancel_media_event_timer()
                 self.send_media_broadcast_close(self.last_played_media['type'])
 
-    def do_clear_playlist(self):
+    def do_clear_playlist(self):  # EDITED
         """ Clear the playlist. """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if len(self.playlist) is not 0:
                 pl_length = str(len(self.playlist))
                 self.playlist[:] = []
@@ -745,12 +839,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             else:
                 self.send_bot_msg('*The playlist is empty, nothing to delete.*', self.is_client_mod)
 
-    def do_nick(self, new_nick):
+    def do_nick(self, new_nick):  # EDITED
         """
         Set a new nick for the bot.
         :param new_nick: str the new nick.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if len(new_nick) is 0:
                 self.client_nick = pinylib.create_random_string(5, 25)
                 self.set_nick()
@@ -759,12 +854,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     self.client_nick = new_nick
                     self.set_nick()
 
-    def do_topic(self, topic):
+    def do_topic(self, topic):  # EDITED
         """
         Sets the room topic.
         :param topic: str the new topic.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(topic) is 0:
                     self.send_topic_msg('')
@@ -775,12 +871,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             else:
                 self.send_bot_msg('Command not enabled')
 
-    def do_kick(self, user_name):
+    def do_kick(self, user_name):  # EDITED
         """
         Kick a user out of the room.
         :param user_name: str the username to kick.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(user_name) is 0:
                     self.send_bot_msg('Missing username.', self.is_client_mod)
@@ -790,18 +887,21 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     user = self.find_user_info(user_name)
                     if user is None:
                         self.send_bot_msg('No user named: *' + user_name + '*', self.is_client_mod)
+                    elif user.is_owner or user.is_super:
+                        self.send_bot_msg('Not allowed.', self.is_client_mod)
                     else:
                         self.send_ban_msg(user_name, user.id)
                         self.send_forgive_msg(user.id)
             else:
                 self.send_bot_msg('Command not enabled.')
 
-    def do_ban(self, user_name):
+    def do_ban(self, user_name):  # EDITED
         """
         Ban a user from the room.
         :param user_name: str the username to ban.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(user_name) is 0:
                     self.send_bot_msg('Missing username.', self.is_client_mod)
@@ -811,15 +911,18 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     user = self.find_user_info(user_name)
                     if user is None:
                         self.send_bot_msg('No user named: *' + user_name + '*', self.is_client_mod)
+                    elif user.is_owner or user.is_super:
+                        self.send_bot_msg('Not allowed.', self.is_client_mod)
                     else:
                         self.send_ban_msg(user_name, user.id)
 
-    def do_bad_nick(self, bad_nick):
+    def do_bad_nick(self, bad_nick):  # EDITED
         """
         Adds a bad username to the bad nicks file.
         :param bad_nick: str the bad nick to write to file.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(bad_nick) is 0:
                     self.send_bot_msg('Missing username.', self.is_client_mod)
@@ -834,12 +937,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                             pinylib.fh.file_writer(self.config_path(), OPTIONS['badnicks'], bad_nick)
                             self.send_bot_msg('*' + bad_nick + '* was added to file.', self.is_client_mod)
 
-    def do_remove_bad_nick(self, bad_nick):
+    def do_remove_bad_nick(self, bad_nick):  # EDITED
         """
         Removes a bad nick from bad nicks file.
         :param bad_nick: str the bad nick to remove from file.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(bad_nick) is 0:
                     self.send_bot_msg('Missing username', self.is_client_mod)
@@ -848,12 +952,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     if rem:
                         self.send_bot_msg(bad_nick + ' was removed.', self.is_client_mod)
 
-    def do_bad_string(self, bad_string):
+    def do_bad_string(self, bad_string):  # EDITED
         """
         Adds a bad string to the bad strings file.
         :param bad_string: str the bad string to add to file.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(bad_string) is 0:
                     self.send_bot_msg('Bad string can\'t be blank.', self.is_client_mod)
@@ -870,12 +975,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                             pinylib.fh.file_writer(self.config_path(), OPTIONS['badstrings'], bad_string)
                             self.send_bot_msg('*' + bad_string + '* was added to file.', self.is_client_mod)
 
-    def do_remove_bad_string(self, bad_string):
+    def do_remove_bad_string(self, bad_string):  # EDITED
         """
         Removes a bad string from the bad strings file.
         :param bad_string: str the bad string to remove from file.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(bad_string) is 0:
                     self.send_bot_msg('Missing word string.', self.is_client_mod)
@@ -884,12 +990,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     if rem:
                         self.send_bot_msg(bad_string + ' was removed.', self.is_client_mod)
 
-    def do_bad_account(self, bad_account_name):
+    def do_bad_account(self, bad_account_name):  # EDITED
         """
         Adds a bad account name to the bad accounts file.
         :param bad_account_name: str the bad account name to add to file.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(bad_account_name) is 0:
                     self.send_bot_msg('Account can\'t be blank.', self.is_client_mod)
@@ -906,12 +1013,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                             pinylib.fh.file_writer(self.config_path(), OPTIONS['badaccounts'], bad_account_name)
                             self.send_bot_msg('*' + bad_account_name + '* was added to file.', self.is_client_mod)
 
-    def do_remove_bad_account(self, bad_account):
+    def do_remove_bad_account(self, bad_account):  # EDITED
         """
         Removes a bad account from the bad accounts file.
         :param bad_account: str the badd account name to remove from file.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(bad_account) is 0:
                     self.send_bot_msg('Missing account.', self.is_client_mod)
@@ -920,12 +1028,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     if rem:
                         self.send_bot_msg(bad_account + ' was removed.', self.is_client_mod)
 
-    def do_list_info(self, list_type):
+    def do_list_info(self, list_type):  # EDITED
         """
         Shows info of different lists/files.
         :param list_type: str the type of list to find info for.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(list_type) is 0:
                     self.send_bot_msg('Missing list type.', self.is_client_mod)
@@ -964,12 +1073,22 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                                         self.send_owner_run_msg('(%s) *%s* %s' % (i, v_title, v_time))
                                     i_count += 1
 
-    def do_user_info(self, user_name):
+                    elif list_type.lower() == 'mods':
+                        if self.is_client_owner and self.user_obj.is_super:
+                            if len(self.privacy_settings.room_moderators) is 0:
+                                self.send_bot_msg('*There is currently no moderators for this room.*',
+                                                  self.is_client_mod)
+                            elif len(self.privacy_settings.room_moderators) is not 0:
+                                mods = ', '.join(self.privacy_settings.room_moderators)
+                                self.send_bot_msg('*Moderators:* ' + mods, self.is_client_mod)
+
+    def do_user_info(self, user_name):  # EDITED
         """
         Shows user object info for a given user name.
         :param user_name: str the user name of the user to show the info for.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(user_name) is 0:
                     self.send_bot_msg('Missing username.', self.is_client_mod)
@@ -988,12 +1107,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                             self.send_owner_run_msg('*Last login:* ' + str(user.last_login))
                         self.send_owner_run_msg('*Last message:* ' + str(user.last_msg))
 
-    def do_youtube_search(self, search_str):
+    def do_youtube_search(self, search_str):  # EDITED
         """
         Searches youtube for a given search term, and adds the results to a list.
         :param search_str: str the search term to search for.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(search_str) is 0:
                     self.send_bot_msg('Missing search term.', self.is_client_mod)
@@ -1007,12 +1127,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     else:
                         self.send_bot_msg('Could not find: ' + search_str, self.is_client_mod)
 
-    def do_play_youtube_search(self, int_choice):
+    def do_play_youtube_search(self, int_choice):  # EDITED
         """
         Plays a youtube from the search list.
         :param int_choice: int the index in the search list to play.
         """
-        if self.user_obj.is_owner or self.user_obj.is_mod or self.user_obj.has_power:
+        if self.user_obj.is_owner or self.user_obj.is_super \
+                or self.user_obj.is_mod or self.user_obj.has_power:
             if self.is_client_mod:
                 if len(self.search_list) > 0:
                     try:
@@ -1042,14 +1163,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
 
     def do_help(self):
         """ Posts a link to github readme/wiki or other page about the bot commands. """
-        if self.user_obj.is_owner:
-            self.send_undercover_msg(self.user_obj.nick, '*Help:* https://github.com/nortxort/pinylib/wiki/commands')
-        elif self.user_obj.is_mod or self.user_obj.has_power:
-            self.send_undercover_msg(self.user_obj.nick, '*Help:* https://github.com/nortxort/pinylib/wiki/' +
-                                     'Commands#moderator-and-bot-controller-commands')
-        else:
-            self.send_undercover_msg(self.user_obj.nick, '*Help:* https://github.com/nortxort/pinylib/wiki/' +
-                                     'Commands#public-commands')
+        self.send_undercover_msg(self.user_obj.nick, '*Help:* https://github.com/nortxort/pinylib/wiki/commands')
 
     def do_uptime(self):
         """ Shows the bots uptime. """
@@ -1088,7 +1202,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         else:
             self.send_bot_msg('Not enabled right now..')
 
-    def do_now_playing(self):  # NEW
+    def do_now_playing(self):
         """ Shows the currently playing media title. """
         if self.is_client_mod:
             if self.media_timer_thread is not None and self.media_timer_thread.is_alive():
@@ -1313,7 +1427,14 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             # The rest is a command argument.
             pm_arg = ' '.join(pm_parts[1:]).strip()
 
-            # Owner commands.
+            # Super mod commands.
+            if pm_cmd == OPTIONS['prefix'] + 'rp':  # NEW
+                threading.Thread(target=self.do_set_room_pass, args=(pm_arg, )).start()
+
+            elif pm_cmd == OPTIONS['prefix'] + 'bp':  # NEW
+                threading.Thread(target=self.do_set_braodcast_pass, args=(pm_arg, )).start()
+
+            # Owner and super mod commands.
             if pm_cmd == OPTIONS['prefix'] + 'key':
                 self.do_key(pm_arg)
 
@@ -1345,13 +1466,19 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             elif pm_cmd == OPTIONS['prefix'] + 'noguest':
                 self.do_no_guest(pm_arg)
 
-            elif pm_cmd == OPTIONS['prefix'] + 'newusers':  # NEW
+            elif pm_cmd == OPTIONS['prefix'] + 'guestnick':  # NEW
+                self.do_no_guest_nicks(pm_arg)
+
+            elif pm_cmd == OPTIONS['prefix'] + 'newusers':
                 self.do_newusers(pm_arg)
 
             elif pm_cmd == OPTIONS['prefix'] + 'skip':
                 self.do_skip()
 
             # Public commands.
+            elif pm_cmd == OPTIONS['prefix'] + 'sudo':  # NEW
+                self.do_super_user(pm_arg)
+
             elif pm_cmd == OPTIONS['prefix'] + 'opme':
                 self.do_opme(pm_arg)
 
@@ -1359,16 +1486,54 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 self.do_pm_bridge(pm_parts)
 
         # Print to console.
-        self.console_write(pinylib.COLOR['white'], 'Private message from ' + msg_sender + ':' +
-                           str(private_msg).replace(self.key, '***KEY***'))
+        self.console_write(pinylib.COLOR['white'], 'Private message from ' + msg_sender + ':' + str(private_msg)
+                           .replace(self.key, '***KEY***')
+                           .replace(OPTIONS['super_key'], '***SUPER KEY***'))
 
-    # == Owner Command Methods. ==
-    def do_key(self, new_key):
+    # == Super Mod Command Methods. ==
+    def do_set_room_pass(self, password):  # NEW
+        """
+        Set a room password for the room.
+        :param password: str the room password
+        """
+        if self.is_client_owner:
+            if self.user_obj.is_super:
+                if not password:
+                    self.privacy_settings.set_room_password()
+                    self.send_bot_msg('*The room password was removed.*', self.is_client_mod)
+                    pinylib.time.sleep(1)
+                    self.send_private_msg('The room password was removed.', self.user_obj.nick)
+                elif len(password) > 1:
+                    self.privacy_settings.set_room_password(password)
+                    self.send_private_msg('*The room password is now:* ' + password, self.user_obj.nick)
+                    pinylib.time.sleep(1)
+                    self.send_bot_msg('*The room is now password protected.*', self.is_client_mod)
+
+    def do_set_braodcast_pass(self, password):  # NEW
+        """
+        Set a broadcast password for the room.
+        :param password: str the password
+        """
+        if self.is_client_owner:
+            if self.user_obj.is_super:
+                if not password:
+                    self.privacy_settings.set_broadcast_password()
+                    self.send_bot_msg('*The broadcast password was removed.*', self.is_client_mod)
+                    pinylib.time.sleep(1)
+                    self.send_private_msg('The broadcast password was removed.', self.user_obj.nick)
+                elif len(password) > 1:
+                    self.privacy_settings.set_broadcast_password(password)
+                    self.send_private_msg('*The broadcast password is now:* ' + password, self.user_obj.nick)
+                    pinylib.time.sleep(1)
+                    self.send_bot_msg('*Broadcast password is enabled.*', self.is_client_mod)
+
+    # == Owner And Super Mod Command Methods. ==
+    def do_key(self, new_key):  # EDITED
         """
         Shows or sets a new secret key.
         :param new_key: str the new secret key.
         """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             if len(new_key) is 0:
                 self.send_private_msg('The current key is: *' + self.key + '*', self.user_obj.nick)
             elif len(new_key) < 6:
@@ -1378,29 +1543,29 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 self.key = new_key
                 self.send_private_msg('The key was changed to: *' + self.key + '*', self.user_obj.nick)
 
-    def do_clear_bad_nicks(self):
+    def do_clear_bad_nicks(self):  # EDITED
         """ Clears the bad nicks file. """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             pinylib.fh.delete_file_content(self.config_path(), OPTIONS['badnicks'])
 
-    def do_clear_bad_strings(self):
+    def do_clear_bad_strings(self):  # EDITED
         """ Clears the bad strings file. """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             pinylib.fh.delete_file_content(self.config_path(), OPTIONS['badstrings'])
 
-    def do_clear_bad_accounts(self):
+    def do_clear_bad_accounts(self):  # EDITED
         """ Clears the bad accounts file. """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             pinylib.fh.delete_file_content(self.config_path(), OPTIONS['badaccounts'])
 
     # == Mod And Bot Controller Command Methods. ==
-    def do_op_user(self, msg_parts):
+    def do_op_user(self, msg_parts):  # EDITED
         """
         Lets the room owner, a mod or a bot controller make another user a bot controller.
-        NOTE: Mods or bot controllers will have to provide a key, owner does not.
+        NOTE: Mods or bot controllers will have to provide a key, owner and super does not.
         :param msg_parts: list the pm message as a list.
         """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             if len(msg_parts) == 1:
                 self.send_private_msg('Missing username.', self.user_obj.nick)
             elif len(msg_parts) == 2:
@@ -1428,13 +1593,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 else:
                     self.send_private_msg('Wrong key.', self.user_obj.nick)
 
-    def do_deop_user(self, msg_parts):
+    def do_deop_user(self, msg_parts):  # EDITED
         """
         Lets the room owner, a mod or a bot controller remove a user from being a bot controller.
-        NOTE: Mods or bot controllers will have to provide a key, owner does not.
+        NOTE: Mods or bot controllers will have to provide a key, owner and super does not.
         :param msg_parts: list the pm message as a list
         """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             if len(msg_parts) == 1:
                 self.send_private_msg('Missing username.', self.user_obj.nick)
             elif len(msg_parts) == 2:
@@ -1461,12 +1626,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 else:
                     self.send_private_msg('Wrong key.', self.user_obj.nick)
 
-    def do_cam_up(self, key):
+    def do_cam_up(self, key):  # EDITED
         """
         Makes the bot camup.
+        NOTE: Mods or bot controllers will have to provide a key, owner and super does not.
         :param key str the key needed for moderators/bot controllers.
         """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             self.send_bauth_msg()
             self.send_create_stream()
             self.send_publish()
@@ -1480,12 +1646,13 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             else:
                 self.send_private_msg('Wrong key.', self.user_obj.nick)
 
-    def do_cam_down(self, key):
+    def do_cam_down(self, key):  # EDITED
         """
         Makes the bot cam down.
+        NOTE: Mods or bot controllers will have to provide a key, owner and super does not.
         :param key: str the key needed for moderators/bot controllers.
         """
-        if self.user_obj.is_owner:
+        if self.user_obj.is_owner or self.user_obj.is_super:
             self.send_close_stream()
         elif self.user_obj.is_mod or self.user_obj.has_power:
             if len(key) is 0:
@@ -1495,100 +1662,149 @@ class TinychatBot(pinylib.TinychatRTMPClient):
             else:
                 self.send_private_msg('Wrong key.', self.user_obj.nick)
 
-    def do_nocam(self, key):
+    def do_nocam(self, key):  # EDITED
         """
         Toggles if broadcasting is allowed or not.
-        NOTE: Mods or bot controllers will have to provide a key, owner does not.
+        NOTE: Mods or bot controllers will have to provide a key, owner and super does not.
         :param key: str secret key.
         """
-        if self.no_cam:
+        if self.is_broadcasting_allowed or self.user_obj.is_super:
             if self.user_obj.is_owner:
-                self.no_cam = False
-                self.send_private_msg('*Broadcasting is allowed.*', self.user_obj.nick)
-            elif self.user_obj.is_mod or self.user_obj.has_power:
-                if len(key) is 0:
-                    self.send_private_msg('missing key.', self.user_obj.nick)
-                elif key == self.key:
-                    self.no_cam = False
-                    self.send_private_msg('*Broadcasting is allowed.*', self.user_obj.nick)
-                else:
-                    self.send_private_msg('Wrong key.', self.user_obj.nick)
-        else:
-            if self.user_obj.is_owner:
-                self.no_cam = True
+                self.is_broadcasting_allowed = False
                 self.send_private_msg('*Broadcasting is NOT allowed.*', self.user_obj.nick)
             elif self.user_obj.is_mod or self.user_obj.has_power:
                 if len(key) is 0:
                     self.send_private_msg('missing key.', self.user_obj.nick)
                 elif key == self.key:
-                    self.no_cam = True
+                    self.is_broadcasting_allowed = False
                     self.send_private_msg('*Broadcasting is NOT allowed.*', self.user_obj.nick)
                 else:
                     self.send_private_msg('Wrong key.', self.user_obj.nick)
-
-    def do_no_guest(self, key):
-        """
-        Toggles if guests are allowed to join the room or not.
-        NOTE: Mods or bot controllers will have to provide a key, owner does not.
-        :param key: str secret key.
-        """
-        if self.no_guests:
-            if self.user_obj.is_owner:
-                self.no_guests = False
-                self.send_private_msg('*Guests ARE allowed to join the room.*', self.user_obj.nick)
+        else:
+            if self.user_obj.is_owner or self.user_obj.is_super:
+                self.is_broadcasting_allowed = True
+                self.send_private_msg('*Broadcasting is allowed.*', self.user_obj.nick)
             elif self.user_obj.is_mod or self.user_obj.has_power:
                 if len(key) is 0:
                     self.send_private_msg('missing key.', self.user_obj.nick)
                 elif key == self.key:
-                    self.no_guests = False
-                    self.send_private_msg('*Guests ARE allowed to join.*', self.user_obj.nick)
+                    self.is_broadcasting_allowed = True
+                    self.send_private_msg('*Broadcasting is allowed.*', self.user_obj.nick)
                 else:
                     self.send_private_msg('Wrong key.', self.user_obj.nick)
-        else:
-            if self.user_obj.is_owner:
-                self.no_guests = True
+
+    def do_no_guest(self, key):  # EDITED
+        """
+        Toggles if guests are allowed to join the room or not.
+        NOTE: Mods or bot controllers will have to provide a key, owner and super does not.
+        :param key: str secret key.
+        """
+        if self.is_guest_entry_allowed:
+            if self.user_obj.is_owner or self.user_obj.is_super:
+                self.is_guest_entry_allowed = False
                 self.send_private_msg('*Guests are NOT allowed to join the room.*', self.user_obj.nick)
             elif self.user_obj.is_mod or self.user_obj.has_power:
                 if len(key) is 0:
                     self.send_private_msg('missing key.', self.user_obj.nick)
                 elif key == self.key:
-                    self.no_guests = True
+                    self.is_guest_entry_allowed = False
                     self.send_private_msg('*Guests are NOT allowed to join.*', self.user_obj.nick)
                 else:
                     self.send_private_msg('Wrong key.', self.user_obj.nick)
+        else:
+            if self.user_obj.is_owner or self.user_obj.is_super:
+                self.is_guest_entry_allowed = True
+                self.send_private_msg('*Guests ARE allowed to join the room.*', self.user_obj.nick)
+            elif self.user_obj.is_mod or self.user_obj.has_power:
+                if len(key) is 0:
+                    self.send_private_msg('missing key.', self.user_obj.nick)
+                elif key == self.key:
+                    self.is_guest_entry_allowed = True
+                    self.send_private_msg('*Guests ARE allowed to join.*', self.user_obj.nick)
+                else:
+                    self.send_private_msg('Wrong key.', self.user_obj.nick)
 
-    def do_newusers(self, key):  # NEW
+    def do_no_guest_nicks(self, key):  # NEW/ISSUE #24
         """
-        Toggles if newusers are allowed to join the room or not.
-        NOTE: Mods or bot controllers will have to provide a key, owner does not.
+        Toggles if guest nicks are allowed or not.
+        NOTE: Mods or bot controllers will have to provide a key, owner and super does not.
         :param key: str secret key.
         """
-        if self.is_newuser_allowed:
-            if self.user_obj.is_owner:
-                self.is_newuser_allowed = False
+        if self.is_guest_nicks_allowed:
+            if self.user_obj.is_owner or self.user_obj.is_super:
+                self.is_guest_nicks_allowed = False
+                self.send_private_msg('*Guests nicks are NOT allowed.*', self.user_obj.nick)
+            elif self.user_obj.is_mod or self.user_obj.has_power:
+                if len(key) is 0:
+                    self.send_private_msg('missing key.', self.user_obj.nick)
+                elif key == self.key:
+                    self.is_guest_nicks_allowed = False
+                    self.send_private_msg('*Guests nicks are NOT allowed.*', self.user_obj.nick)
+                else:
+                    self.send_private_msg('wrong key.', self.user_obj.nick)
+        else:
+            if self.user_obj.is_owner or self.user_obj.is_super:
+                self.is_guest_nicks_allowed = True
+                self.send_private_msg('*Guests nicks ARE allowed.*', self.user_obj.nick)
+            elif self.user_obj.is_mod or self.user_obj.has_power:
+                if len(key) is 0:
+                    self.send_private_msg('missing key.', self.user_obj.nick)
+                elif key == self.key:
+                    self.is_guest_nicks_allowed = True
+                    self.send_private_msg('*Guests nicks ARE allowed.*', self.user_obj.nick)
+                else:
+                    self.send_private_msg('wrong key.', self.user_obj.nick)
+
+    def do_newusers(self, key):  # EDITED
+        """
+        Toggles if newusers are allowed to join the room or not.
+        NOTE: Mods or bot controllers will have to provide a key, owner and super does not.
+        :param key: str secret key.
+        """
+        if self.is_newusers_allowed:
+            if self.user_obj.is_owner or self.user_obj.is_super:
+                self.is_newusers_allowed = False
                 self.send_private_msg('*Newusers are NOT allowed to join the room.*', self.user_obj.nick)
             elif self.user_obj.is_mod or self.user_obj.has_power:
                 if len(key) is 0:
                     self.send_private_msg('missing key.', self.user_obj.nick)
                 elif key == self.key:
-                    self.is_newuser_allowed = False
+                    self.is_newusers_allowed = False
                     self.send_private_msg('*Newusers are NOT allowed to join the room.*', self.user_obj.nick)
                 else:
                     self.send_private_msg('Wrong key.', self.user_obj.nick)
         else:
-            if self.user_obj.is_owner:
-                self.is_newuser_allowed = True
+            if self.user_obj.is_owner or self.user_obj.is_super:
+                self.is_newusers_allowed = True
                 self.send_private_msg('*Newusers ARE allowed to join the room.*', self.user_obj.nick)
             elif self.user_obj.is_mod or self.user_obj.has_power:
                 if len(key) is 0:
                     self.send_private_msg('missing key.', self.user_obj.nick)
                 elif key == self.key:
-                    self.is_newuser_allowed = True
+                    self.is_newusers_allowed = True
                     self.send_private_msg('*Newusers ARE allowed to join the room.*', self.user_obj.nick)
                 else:
                     self.send_private_msg('Wrong key.', self.user_obj.nick)
 
     # == Public PM Command Methods. ==
+    def do_super_user(self, super_key):  # NEW
+        """
+        Makes a user super mod, the highest level of mod.
+        It is only possible to be a super mod if the client is owner.
+        :param super_key: str the super key
+        """
+        if self.is_client_owner:
+            if len(super_key) is 0:
+                self.send_private_msg('Missing super key.', self.user_obj.nick)
+            elif super_key == OPTIONS['super_key']:
+                self.user_obj.is_super = True
+                self.send_private_msg('*You are now a super mod.*', self.user_obj.nick)
+            else:
+                self.send_private_msg('Wrong super key.', self.user_obj.nick)
+        else:
+            self.send_private_msg('Client is owner: *' + str(self.is_client_owner) + '*',
+                                  self.user_obj.nick)
+
     def do_opme(self, key):
         """
         Makes a user a bot controller if user provides the right key.
@@ -1666,7 +1882,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 next_video_title = self.playlist[self.inowplay]['video_title']
                 next_video_time = self.to_human_time(self.playlist[self.inowplay]['video_time'])
                 upnext = '*Next is:* (' + str(self.inowplay) + ') *' + next_video_title + '* ' + next_video_time
-            inquee = len(self.playlist) - self.inowplay  # removed - 1
+            inquee = len(self.playlist) - self.inowplay
             plstat = str(len(self.playlist)) + ' *items in the playlist.* ' + str(inquee) + ' *Still in queue.*'
 
         messages = ['Reporting for duty..', 'Hello, is anyone here?', 'Awaiting command..', 'Observing behavior..',
@@ -1675,7 +1891,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
 
         return random.choice(messages)
 
-    def auto_msg_handler(self):  # NEW
+    def auto_msg_handler(self):
         """ The event handler for auto_msg_timer. """
         if self.is_connected:
             self.send_bot_msg(self.random_msg())
@@ -1690,6 +1906,12 @@ class TinychatBot(pinylib.TinychatRTMPClient):
         threading.Timer(OPTIONS['auto_message_interval'], self.auto_msg_handler).start()
 
     # Helper Methods.
+    def get_privacy_settings(self):  # NEW
+        """ Parse the privacy settings page. """
+        log.info('Parsing %s\'s privacy page. Proxy %s' % (self.account, self.proxy))
+        self.privacy_settings = privacy_settings.TinychatPrivacyPage(self.proxy)
+        self.privacy_settings.parse_privacy_settings()
+
     def config_path(self):
         """ Returns the path to the rooms configuration directory. """
         path = pinylib.SETTINGS['config_path'] + self.roomname + '/'
@@ -1797,4 +2019,6 @@ if __name__ == '__main__':
         formater = '%(asctime)s : %(levelname)s : %(filename)s : %(lineno)d : %(funcName)s() : %(name)s : %(message)s'
         logging.basicConfig(filename=OPTIONS['debug_file_name'], level=logging.DEBUG, format=formater)
         log.info('Starting bot_example.py version: %s, pinylib version: %s' % (__version__, pinylib.__version__))
+    else:
+        log.addHandler(logging.NullHandler())
     main()
