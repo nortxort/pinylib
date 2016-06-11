@@ -172,6 +172,7 @@ def recaptcha(proxy=None):
     if response is not None:
         if response['content']['need_to_solve_captcha'] == 1:
             link = 'http://tinychat.com/cauth/recaptcha?token=%s' % response['content']['token']
+            print (link)
             webbrowser.open(link, new=1)
             raw_input('Solve the captcha and click enter to continue.')
         return response['cookies']
