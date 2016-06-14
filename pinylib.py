@@ -12,7 +12,7 @@ from api import web_request, tinychat_api
 from files import file_handler as fh
 from rtmp import rtmp_protocol
 
-__version__ = 4.2
+__version__ = '4.2.0'
 
 #  Basic settings.
 SETTINGS = {
