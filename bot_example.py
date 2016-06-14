@@ -9,7 +9,7 @@ import logging
 import pinylib
 from api import soundcloud, youtube, other_apis, lastfm, privacy_settings
 
-__version__ = 3.6
+__version__ = '3.6.1'
 
 #  Bot Settings.
 OPTIONS = {
@@ -1432,7 +1432,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 threading.Thread(target=self.do_set_room_pass, args=(pm_arg, )).start()
 
             elif pm_cmd == OPTIONS['prefix'] + 'bp':  # NEW
-                threading.Thread(target=self.do_set_braodcast_pass, args=(pm_arg, )).start()
+                threading.Thread(target=self.do_set_broadcast_pass, args=(pm_arg, )).start()
 
             # Owner and super mod commands.
             if pm_cmd == OPTIONS['prefix'] + 'key':
@@ -1509,7 +1509,7 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                     pinylib.time.sleep(1)
                     self.send_bot_msg('*The room is now password protected.*', self.is_client_mod)
 
-    def do_set_braodcast_pass(self, password):  # NEW
+    def do_set_broadcast_pass(self, password):  # NEW
         """
         Set a broadcast password for the room.
         :param password: str the password
