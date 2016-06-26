@@ -189,6 +189,42 @@ class TinychatPrivacyPage:
             self._greenroom = '0'
             self._update()
             return False
+            
+    def current_settings(self):
+        """ Returns a dictionary of the current room settings.
+        :return dict{'broadcast_pass', 'room_pass', 'allow_guests', 'show_on_directory', 'push2talk', 'greenroom'}
+        """
+        settings = dict()
+        if self._broadcast_password:
+            settings['broadcast_pass'] = 'Enabled'
+        else:
+            settings['broadcast_pass'] = 'Disabled'
+        if self._room_password:
+            settings['room_pass'] = 'Enabled'
+        else:
+            settings['room_pass'] = 'Disabled'
+        if self._allow_guests == '2':
+            settings['allow_guests'] = 'Twitter/facebook'
+        elif self._allow_guests == '4':
+            settings['allow_guests'] = 'Facebook'
+        elif self._allow_guests == '5':
+            settings['allow_guests'] = 'Twitter'
+        else:
+            settings['allow_guests'] = 'No login required'
+        if self._public_directory == '0':
+            settings['show_on_directory'] = 'Hidden'
+        elif self._public_directory == '1':
+            settings['show_on_directory'] = 'Public'
+        if self._push2talk == '0':
+            settings['push2talk'] = 'Disabled'
+        elif self._push2talk == '1':
+            settings['push2talk'] = 'Enabled'
+        if self._greenroom == '0':
+            settings['greenroom'] = 'Disabled'
+        elif self._greenroom == '1':
+            settings['greenroom'] = 'Enabled'
+
+        return settings
 
     def _update(self):
         """ Update the privacy settings page. """
