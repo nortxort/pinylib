@@ -355,6 +355,9 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 self.do_media_info()
 
             # Mod and bot controller commands.
+            elif cmd == OPTIONS['prefix'] + 'rs':
+                self.do_room_settings()
+            
             elif cmd == OPTIONS['prefix'] + 'top':
                 threading.Thread(target=self.do_lastfm_chart, args=(cmd_arg, )).start()
 
@@ -588,6 +591,18 @@ class TinychatBot(pinylib.TinychatRTMPClient):
                 self.send_owner_run_msg('*Current Time Point:* ' + self.to_human_time(self.current_media_time_point()))
                 self.send_owner_run_msg('*Active Threads:* ' + str(threading.active_count()))
                 self.send_owner_run_msg('*Is Mod Playing:* ' + str(self.is_mod_playing))
+                
+    def do_room_settings(self):  # NEW
+        """ Shows current room settings. """
+        if self.is_client_owner:
+            if self.user_obj.is_super or self.user_obj.is_mod or self.user_obj.has_power:
+                settings = self.privacy_settings.current_settings()
+                self.send_owner_run_msg('*Broadcast Password:* ' + settings['broadcast_pass'])
+                self.send_owner_run_msg('*Room Password:* ' + settings['room_pass'])
+                self.send_owner_run_msg('*Login Type:* ' + settings['allow_guests'])
+                self.send_owner_run_msg('*Directory:* ' + settings['show_on_directory'])
+                self.send_owner_run_msg('*Push2Talk:* ' + settings['push2talk'])
+                self.send_owner_run_msg('*Greenroom:* ' + settings['greenroom'])
 
     def do_lastfm_chart(self, chart_items):  # EDITED
         """
