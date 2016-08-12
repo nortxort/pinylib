@@ -33,6 +33,19 @@ def file_writer(file_path, file_name, write_this):
         f.write(write_this + '\n')
 
 
+def delete_file(file_path, file_name):
+    """
+    Deletes a file entirely.
+    :param file_path: str the path to the file.
+    :param file_name: str the file name.
+    :return: True if deleted, else False
+    """
+    if os.path.isfile(file_path + file_name):
+        os.remove(file_path + file_name)
+        return True
+    return False
+
+
 def delete_file_content(file_path, file_name):
     """
     Deletes all content from a file.
