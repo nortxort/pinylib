@@ -21,7 +21,7 @@ pinylib requires 3 libraries that are not part of the standard python library, t
 * [requests](https://github.com/kennethreitz/requests "requests")
 * [colorama](https://github.com/tartley/colorama "Colorama")
 
-These can all be installed form a command prompt with pip.
+These can all be installed from a command prompt with pip.
 
 `pip install pyamf requests colorama`
 
