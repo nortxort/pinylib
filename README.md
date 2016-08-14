@@ -9,7 +9,7 @@ The core file [pinylib.py](https://github.com/nortxort/pinylib/blob/master/pinyl
 
 ## Setting up
 
-Examples shown here, assumes you are using windows.
+Examples shown here, assumes you are using windows, know how to run python from a command promt, and know how to install modules using pip.
 
 pinylib was developed using [python 2.7](https://www.python.org/downloads/windows/ "python for windows") so this is the recomended python interpreter. If you do not already have that installed, install if from the link.
 
