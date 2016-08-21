@@ -72,6 +72,7 @@ class RtmpReader:
         message_body = []
         msg_body_len = 0
         header = rtmp_protocol_base.header_decode(self.stream)
+        log.debug('header %s' % header)
 
         # FIXME: this should really be implemented inside header_decode
         if header.data_type == types.DT_NONE:
@@ -79,7 +80,6 @@ class RtmpReader:
         self.prv_header = header
 
         while True:
-            # NOTE: this whole loop section needs to be looked at.
             read_bytes = min(header.body_length - msg_body_len, self.chunk_size)
 
             message_body.append(self.stream.read(read_bytes))
@@ -103,9 +103,6 @@ class RtmpReader:
         # Decode the message based on the datatype present in the header
         ret = {'msg': header.data_type}
         if ret['msg'] == types.DT_USER_CONTROL:
-            log.debug('DT_USER_CONTROL: %s Header: %s' % (ret['msg'], header))
-            # BUG: sometimes i get event_type = 512 in RtmpClient.handle_packet
-            # this seems to only happen when using PING requests to keep the bot alive with.
             ret['event_type'] = body_stream.read_ushort()
             ret['event_data'] = body_stream.read()
 
@@ -631,7 +628,6 @@ class RtmpClient:
         """
         Send a PING request.
         NOTE: I think its highly unlikely that a client would send this to a server,
-        it's usally the other way around, the sever sends this to the client to make sure the client is alive.
         It does seem like some servers(all?) respond to this.
         """
         msg = {
