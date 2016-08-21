@@ -599,6 +599,11 @@ class RtmpClient:
         self.socket.connect((self.ip, self.port))
         self.file = self.socket.makefile()
         self.stream = FileDataTypeMixIn(self.file)
+        
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        # If you are on windows and having problems with the client timing out,
+        # then you could try and uncomment next line.
+        # self.socket.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 10000, 3000))
 
         self.handshake()
 
@@ -609,8 +614,11 @@ class RtmpClient:
 
     def shutdown(self):
         """ Closes the socket connection. """
-        self.socket.shutdown(socket.SHUT_RDWR)
-        self.socket.close()
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+            self.socket.close()
+        except socket.error as se:
+            log.error('socket error %s' % se)
 
     def shared_object_use(self, so):
         """ Use a shared object and add it to the managed list of SOs. """
