@@ -17,7 +17,7 @@ import about
 
 #  Basic settings.
 SETTINGS = {
-    'swf_version': '0669',                      # tinychat swf version.
+    'swf_version': '0671',                      # tinychat swf version.
     'chat_logging': True,                       # log chat messages/events.
     'debug_mode': False,                        # True shows additional info/errors.
     'debug_to_file': False,                     # log debug info to file.
@@ -60,7 +60,7 @@ def write_to_log(msg, room_name):
     d = time.strftime('%Y-%m-%d')
     file_name = d + '_' + room_name + '.log'
     path = SETTINGS['config_path'] + room_name + '/logs/'
-    fh.file_writer(path, file_name, msg.encode('ascii', 'ignore'))
+    fh.file_writer(path, file_name, msg.encode(encoding='UTF-8', errors='ignore'))
 
 
 class User:
@@ -116,7 +116,6 @@ class TinychatRTMPClient:
         self._desktop_version = u'Desktop 1.0.0.%s' % SETTINGS['swf_version']
         self._embed_url = u'http://tinychat.com/' + self._roomname
         self._client_id = None
-        self._stream_id = 0  # should be handled by rtmp_protocol
         self._bauth_key = None
         self._is_reconnected = False
         self._is_client_mod = False
@@ -259,7 +258,7 @@ class TinychatRTMPClient:
 
         # increase reconnect_delay after each reconnect.
         self._reconnect_delay *= 2
-        if self._reconnect_delay > 1800:
+        if self._reconnect_delay > 900:
             self._reconnect_delay = SETTINGS['reconnect_delay']
 
         if self.account and self.password:
@@ -434,10 +433,9 @@ class TinychatRTMPClient:
 
     # Callback Event Methods.
     def on_result(self, result_info):
-        # i think that this should be handled within rtmp_protocol.
         if len(result_info) is 4 and type(result_info[3]) is int:
-            self._stream_id = result_info[3]  # stream ID?
-            log.debug('Stream ID: %s' % self._stream_id)
+            stream_id = result_info[3]  # stream ID?
+            log.debug('Stream ID: %s' % stream_id)
         if SETTINGS['debug_mode']:
             for list_item in result_info:
                 if type(list_item) is rtmp_protocol.pyamf.ASObject:
@@ -890,7 +888,6 @@ class TinychatRTMPClient:
     def send_media_broadcast_start(self, media_type, video_id, time_point=0, private_nick=None):
         """
         Starts a media broadcast.
-        NOTE: This method replaces play_youtube and play_soundcloud
         :param media_type: str 'youTube' or 'soundCloud'
         :param video_id: str the media video ID.
         :param time_point: int where to start the media from in milliseconds.
@@ -905,7 +902,6 @@ class TinychatRTMPClient:
     def send_media_broadcast_close(self, media_type, private_nick=None):
         """
         Close a media broadcast.
-        NOTE: This method replaces stop_youtube and stop_soundcloud
         :param media_type: str 'youTube' or 'soundCloud'
         :param private_nick str if not None, send this message to this username only.
         """
@@ -1037,7 +1033,6 @@ class TinychatRTMPClient:
         fetch the room config from tinychat API every 5 minute(300 seconds).
         See line 228 at http://tinychat.com/embed/chat.js
         """
-        log.info('Starting auto_job_timer, with interval: %s' % SETTINGS['auto_job_interval'])
         threading.Timer(SETTINGS['auto_job_interval'], self.auto_job_handler).start()
 
 
