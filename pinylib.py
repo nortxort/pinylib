@@ -614,28 +614,38 @@ class TinychatRTMPClient:
                 self.on_reported(self.user.id, msg_sender)
 
             elif msg_cmd[0] == '/mbs':
-                media_type = msg_cmd[1]
-                media_id = msg_cmd[2]
-                threading.Thread(target=self.on_media_broadcast_start,
-                                 args=(media_type, media_id, msg_sender, )).start()
+                if self.user.is_mod:
+                    if len(msg_cmd) is 3:
+                        media_type = msg_cmd[1]
+                        media_id = msg_cmd[2]
+                        threading.Thread(target=self.on_media_broadcast_start,
+                                         args=(media_type, media_id, msg_sender, )).start()
 
             elif msg_cmd[0] == '/mbc':
-                media_type = msg_cmd[1]
-                self.on_media_broadcast_close(media_type, msg_sender)
+                if self.user.is_mod:
+                    if len(msg_cmd) is 2:
+                        media_type = msg_cmd[1]
+                        self.on_media_broadcast_close(media_type, msg_sender)
 
             elif msg_cmd[0] == '/mbpa':
-                media_type = msg_cmd[1]
-                self.on_media_broadcast_paused(media_type, msg_sender)
+                if self.user.is_mod:
+                    if len(msg_cmd) is 2:
+                        media_type = msg_cmd[1]
+                        self.on_media_broadcast_paused(media_type, msg_sender)
 
             elif msg_cmd[0] == '/mbpl':
-                media_type = msg_cmd[1]
-                time_point = int(msg_cmd[2])
-                self.on_media_broadcast_play(media_type, time_point, msg_sender)
+                if self.user.is_mod:
+                    if len(msg_cmd) is 3:
+                        media_type = msg_cmd[1]
+                        time_point = int(msg_cmd[2])
+                        self.on_media_broadcast_play(media_type, time_point, msg_sender)
 
             elif msg_cmd[0] == '/mbsk':
-                media_type = msg_cmd[1]
-                time_point = int(msg_cmd[2])
-                self.on_media_broadcast_skip(media_type, time_point, msg_sender)
+                if self.user.is_mod:
+                    if len(msg_cmd) is 3:
+                        media_type = msg_cmd[1]
+                        time_point = int(msg_cmd[2])
+                        self.on_media_broadcast_skip(media_type, time_point, msg_sender)
         else:
             self.message_handler(msg_sender, decoded_msg.strip())
 
