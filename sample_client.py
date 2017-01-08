@@ -1,14 +1,17 @@
 import logging
-import pinylib
 
 import config
+import pinylib
 
 log = logging.getLogger(__name__)
 
 
 def main():
     room_name = raw_input('Enter room name: ').strip()
-    client = pinylib.TinychatRTMPClient(roomname=room_name)
+    if config.ACCOUNT and config.PASSWORD:
+        client = pinylib.TinychatRTMPClient(roomname=room_name, account=config.ACCOUNT, password=config.PASSWORD)
+    else:
+        client = pinylib.TinychatRTMPClient(roomname=room_name)
     client.nickname = raw_input('Enter nick name (optional): ').strip()
 
     do_login = raw_input('Login? [enter=No] ')
@@ -98,8 +101,7 @@ def main():
 if __name__ == '__main__':
     if config.DEBUG_TO_FILE:
         formater = '%(asctime)s : %(levelname)s : %(filename)s : %(lineno)d : %(funcName)s() : %(name)s : %(message)s'
-        logging.basicConfig(filename=config.DEBUG_FILE_NAME,
-                            level=logging.DEBUG, format=formater)
+        logging.basicConfig(filename=config.DEBUG_FILE_NAME, level=logging.DEBUG, format=formater)
         log.info('Starting pinylib version: %s' % pinylib.__version__)
     else:
         log.addHandler(logging.NullHandler())
