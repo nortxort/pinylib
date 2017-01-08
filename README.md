@@ -1,15 +1,15 @@
 ## Pinylib
 
-RTMP client/module for tinychat chat rooms.
+RTMP module for tinychat chat rooms.
 
 
-pinylib (originally called [tinylib](https://github.com/nortxort/tinylib)) provides classes/methods/functions to create a connection to a tinychat chat room. The idea of the module was to create a base in which developers could build their own entertainment/helper bots with. It could however, also be used as a very basic client.
+pinylib (originally called [tinylib](https://github.com/nortxort/tinylib)) provides classes/methods/functions to create a connection to a tinychat chat room. The idea of the module was to create a base in which developers could build their own entertainment/helper bots with.
 
-The core file [pinylib.py](https://github.com/nortxort/pinylib/blob/master/pinylib.py) is somewhat built over a file made by [MegaLoler](http://pastebin.com/u/MegaLoler "MegaLoler files on pastebin") and can be found [here](http://pastebin.com/0CYCisB5). Since this file is from 2012, a lot of modifications has been made to reflect the changes tinychat has made over the years. 
+The file [pinylib.py](https://github.com/nortxort/pinylib/blob/master/pinylib.py) is somewhat built over a file made by [MegaLoler](http://pastebin.com/u/MegaLoler "MegaLoler files on pastebin") and can be found [here](http://pastebin.com/0CYCisB5). Since this file is from 2012, a lot of modifications has been made to reflect the changes tinychat has made over the years. 
 
 ## Setting up
 
-Examples shown here, assumes you are using windows, know how to run python from a command prompt and know how to install modules using pip.
+Examples shown here, assumes you are using windows.
 
 pinylib was developed using [python 2.7](https://www.python.org/downloads/windows/ "python for windows") so this is the recomended python interpreter. If you do not already have that installed, install if from the link.
 
@@ -21,7 +21,7 @@ pinylib requires 3 libraries that are not part of the standard python library, t
 * [requests](https://github.com/kennethreitz/requests "requests")
 * [colorama](https://github.com/tartley/colorama "Colorama")
 
-These can all be installed from a command prompt with pip.
+These can all be installed form a command prompt with pip.
 
 `pip install pyamf requests colorama`
 
@@ -31,7 +31,7 @@ For more info, see the [wiki](https://github.com/nortxort/pinylib/wiki/Requireme
 
 ## Run the client
 
-Run the client by typing `python path\to\pinylib.py` in a command prompt.
+Run the client by typing `python path\to\sample_client.py` in a command prompt.
 
 
 ## Author
@@ -42,7 +42,7 @@ Run the client by typing `python path\to\pinylib.py` in a command prompt.
 
 The MIT License (MIT)
 
-Copyright (c) 2016 nortxort
+Copyright (c) 2017 nortxort
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 and associated documentation files (the "Software"), to deal in the Software without restriction,
