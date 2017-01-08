@@ -2,6 +2,10 @@
 # Use a prefix, if you plan on adding your own.
 # Settings info https://github.com/nortxort/pinylib/wiki/Settings
 
+# Tinychat account.
+ACCOUNT = ''
+# Password for account
+PASSWORD = ''
 # The swf version that tinychat is currently using.
 SWF_VERSION = '0675'
 # Log chat messages and events.
