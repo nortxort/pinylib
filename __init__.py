@@ -5,3 +5,8 @@
  to tinychat's RTMP server. The idea was to make a library/module that would serve
  as a building block for developers, wanting to make a helper and/or entertainment bot.
  """
+__author__ = 'nortxort'
+__copyright__ = 'Copyright 2017, nortxort'
+__credits__ = ['MegaLoler', 'GoelBiju', 'notnola', 'prekageo', 'Anorov', 'hydralabs']
+__license__ = 'MIT'
+__version__ = '6.0.0'
