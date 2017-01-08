@@ -21,7 +21,7 @@ RESET_INIT_TIME = False
 # Reconnect delay in seconds.
 RECONNECT_DELAY = 60
 # Auto job interval in seconds.
-AUTO_JOB_INTERVAL = 600
+AUTO_JOB_INTERVAL = 300
 # The name of pinylib's debug log file.
 DEBUG_FILE_NAME = 'pinylib_debug.log'
 # The path to the config folder.
