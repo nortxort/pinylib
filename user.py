@@ -1,17 +1,6 @@
 import time
 
 
-"""
-    0 = client
-    1 = room owner (std)
-    2 = bot controller
-    3 = moderator (std)
-    4 = made bot controller
-    5 = normal user (std)
-    6 = ignored (std)
-"""
-
-
 class User:
     """
     A class representing a users information.
