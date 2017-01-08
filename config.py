@@ -7,9 +7,9 @@ SWF_VERSION = '0675'
 # Log chat messages and events.
 CHAT_LOGGING = True
 # Show additional info/errors in console.
-DEBUG_MODE = True
+DEBUG_MODE = False
 # Log debug info to file.
-DEBUG_TO_FILE = True
+DEBUG_TO_FILE = False
 # Use colors for the console.
 CONSOLE_COLORS = True
 # Enable auto job (recommended)
