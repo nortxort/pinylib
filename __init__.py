@@ -9,4 +9,3 @@ __author__ = 'nortxort'
 __copyright__ = 'Copyright 2017, nortxort'
 __credits__ = ['MegaLoler', 'GoelBiju', 'notnola', 'prekageo', 'Anorov', 'hydralabs']
 __license__ = 'MIT'
-__version__ = '6.0.0'
