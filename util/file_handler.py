@@ -18,7 +18,6 @@ def file_reader(file_path, file_name):
             try:
                 with open(file_path + file_name) as f:
                     for line in f:
-                        print (line)
                         file_content.append(line.rstrip('\n'))
             except IOError as ioe:
                 log.error('failed to read file: %s path: %s IOError: %s' % (file_name, file_path, ioe))
