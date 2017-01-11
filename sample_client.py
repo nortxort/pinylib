@@ -35,6 +35,7 @@ def main():
                 is_logged_in = client.login()
         if is_logged_in:
             client.console_write(pinylib.COLOR['bright_green'], 'Logged in as: %s' % client.account)
+            
     if not do_login:
         client.account = ''
         client.password = None
