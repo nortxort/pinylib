@@ -1,7 +1,6 @@
 import time
 
 
-
 class User:
     """
     A class representing a users information.
