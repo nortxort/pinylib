@@ -46,7 +46,7 @@ class Users:
         """
         return self._users
 
-    @property
+    @propertyy
     def mods(self):
         """
         All the moderators in the room.
