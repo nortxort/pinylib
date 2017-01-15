@@ -38,8 +38,7 @@ class Users:
         # Create a dictionary to store each user key value in.
         self._users = dict()
 
-    @property 
-    def all(self):
+    @propertydef all(self):
         """
         All the users in the room.
         :return: dict key value (User)
