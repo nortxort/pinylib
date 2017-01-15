@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """ Pinylib module by Nortxort. https://github.com/nortxort/pinylib """
-
 import logging
 import threading
 import time
@@ -13,7 +12,7 @@ import config
 from rtmplib import rtmp
 from util import core, string_util, file_handler
 
-__version__ = '6.0.0.'
+__version__ = '6.0.1'
 
 #  Console colors.
 COLOR = {
@@ -32,6 +31,9 @@ COLOR = {
 
 init(autoreset=True)
 log = logging.getLogger(__name__)
+
+# Reference to config for submodules.
+CONFIG = config
 
 
 def write_to_log(msg, room_name):
