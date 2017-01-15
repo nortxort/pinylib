@@ -39,7 +39,6 @@ class Users:
         self._users = dict()
 
     @property
-    
     def all(self):
         """
         All the users in the room.
