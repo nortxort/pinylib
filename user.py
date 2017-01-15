@@ -38,7 +38,7 @@ class Users:
         # Create a dictionary to store each user key value in.
         self._users = dict()
 
-    
+    @
     def all(self):
         """
         All the users in the room.
