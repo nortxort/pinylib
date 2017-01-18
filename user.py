@@ -37,6 +37,8 @@ class Users:
     def __init__(self):
         # Create a dictionary to store each user key value in.
         self._users = dict()
+    
+    @property
     def all(self):
         """
         All the users in the room.
