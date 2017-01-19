@@ -12,7 +12,7 @@ import config
 from rtmplib import rtmp
 from util import core, string_util, file_handler
 
-__version__ = '6.0.1'
+__version__ = '6.0.2'
 
 #  Console colors.
 COLOR = {
@@ -107,6 +107,7 @@ class TinychatRTMPClient:
             write_to_log('[' + ts + '] ' + message, self.roomname)
 
     def get_rtmp_parameters(self):
+        """ Get the RTMP parameters needed before trying to connect. """
         conf = core.get_roomconfig_xml(self.roomname, self.room_pass, proxy=self._proxy)
         log.debug('room config: %s' % conf)
         if conf is not None:
@@ -125,11 +126,16 @@ class TinychatRTMPClient:
                 if config.DEBUG_MODE:
                     for k in self.rtmp_parameter:
                         self.console_write(COLOR['white'], '%s: %s' % (k, self.rtmp_parameter[k]))
-                    self.console_write(COLOR['white'], 'account: %s' % self.account)
+                    if self.account:
+                        self.console_write(COLOR['white'], 'account: %s' % self.account)
                 return 3  # is the magic number
         return 4
 
     def login(self):
+        """
+        Try to login to tinychat
+        :return True if logged in, else False
+        """
         if self.account and self.password:
             is_logged_in = core.web.has_cookie('pass')
             if is_logged_in:
@@ -373,8 +379,9 @@ class TinychatRTMPClient:
 
                 elif cmd == 'privmsg':
                     raw_msg = amf0_cmd[4]
+                    msg_color = amf0_cmd[5]
                     msg_sender = amf0_cmd[6]
-                    self.on_privmsg(msg_sender, raw_msg)
+                    self.on_privmsg(msg_sender, raw_msg, msg_color)
 
                 elif cmd == 'notice':
                     notice_msg = amf0_cmd[3]
@@ -386,9 +393,9 @@ class TinychatRTMPClient:
                         self.on_pro(notice_msg_id)
 
                 elif cmd == 'gift':
-                    gift_to = amf0_cmd[3]  # type(dict)
-                    gift_sender = amf0_data[4]  # type(dict)
-                    gift_info = amf0_data[5]  # type(dict)
+                    gift_to = amf0_cmd[3]
+                    gift_sender = amf0_data[4]
+                    gift_info = amf0_data[5]
                     self.on_gift(gift_sender, gift_to, gift_info)
 
                 else:
@@ -576,11 +583,12 @@ class TinychatRTMPClient:
     def on_reported(self, nick, uid):
         self.console_write(COLOR['bright_red'], 'You were reported by: %s:%s' % (nick, uid))
 
-    def on_privmsg(self, msg_sender, raw_msg):
+    def on_privmsg(self, msg_sender, raw_msg, msg_color):
         """
         Message command controller
         :param msg_sender: str the sender of the message.
         :param raw_msg: str the unencoded message.
+        :param msg_color: str the chat message color.
         """
 
         # Get user info object of the user sending the message..
@@ -632,7 +640,12 @@ class TinychatRTMPClient:
                         time_point = int(msg_cmd[2])
                         self.on_media_broadcast_skip(media_type, time_point, msg_sender)
         else:
-            self.message_handler(decoded_msg.strip())
+            # rejecting any messages not using the official message color.
+            if len(msg_color) is 10 and msg_color == u'#262626,en':
+                self.message_handler(decoded_msg.strip())
+            else:
+                log.warning('rejecting chat msg from: %s:%s with unofficial msg color: %s' %
+                            (self.active_user.nick, self.active_user.id, msg_color))
 
     def on_gift(self, gift_sender, gift_reciever, gift_info):  # DEV
         sender_nick = gift_sender['name']
