@@ -640,11 +640,10 @@ class TinychatRTMPClient:
                         time_point = int(msg_cmd[2])
                         self.on_media_broadcast_skip(media_type, time_point, msg_sender)
         else:
-            # rejecting any messages not using the official message color.
-            if len(msg_color) is 10 and msg_color == u'#262626,en':
+            if len(msg_color) is 10:
                 self.message_handler(decoded_msg.strip())
             else:
-                log.warning('rejecting chat msg from: %s:%s with unofficial msg color: %s' %
+                log.warning('rejecting chat msg from: %s:%s with unusual msg color: %s' %
                             (self.active_user.nick, self.active_user.id, msg_color))
 
     def on_gift(self, gift_sender, gift_reciever, gift_info):  # DEV
