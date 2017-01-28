@@ -14,6 +14,8 @@ CHAT_LOGGING = True
 DEBUG_MODE = False
 # Log debug info to file.
 DEBUG_TO_FILE = False
+# Logging level for the debug file.
+DEBUG_LEVEL = 30
 # Use colors for the console.
 CONSOLE_COLORS = True
 # Enable auto job (recommended)
