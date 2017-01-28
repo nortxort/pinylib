@@ -107,8 +107,10 @@ def main():
 if __name__ == '__main__':
     if pinylib.CONFIG.DEBUG_TO_FILE:
         formater = '%(asctime)s : %(levelname)s : %(filename)s : %(lineno)d : %(funcName)s() : %(name)s : %(message)s'
-        logging.basicConfig(filename=pinylib.CONFIG.DEBUG_FILE_NAME, level=logging.DEBUG, format=formater)
+        logging.basicConfig(filename=pinylib.CONFIG.DEBUG_FILE_NAME,
+                            level=pinylib.CONFIG.DEBUG_LEVEL, format=formater)
         log.info('Starting pinylib version: %s' % pinylib.__version__)
     else:
         log.addHandler(logging.NullHandler())
     main()
+    
