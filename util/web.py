@@ -1,9 +1,10 @@
-""" Contains functions to make http GET and http POST with. version 0.0.3 """
+""" Contains functions to make http GET and http POST with. version 0.0.5 """
 import time
 import logging
 import requests
 from requests.utils import quote, unquote
 
+__all__ = ['quote', 'unquote']
 
 log = logging.getLogger(__name__)
 
@@ -28,9 +29,11 @@ def is_cookie_expired(cookie_name):
             else:
                 return None
         if timestamp > expires:
-            log.debug('_request_session.cookies[%s] is expired. time stamp: %s, expires: %s' %
+            log.debug('cookie[\'%s\'] is expired. time stamp: %s, expires: %s' %
                       (cookie_name, timestamp, expires))
             return True
+        log.debug('cookie[\'%s\'] is not expired. time stamp: %s, expires: %s' %
+                  (cookie_name, timestamp, expires))
         return False
 
 

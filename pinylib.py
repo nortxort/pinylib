@@ -12,7 +12,7 @@ import config
 from rtmplib import rtmp
 from util import core, string_util, file_handler
 
-__version__ = '6.0.2'
+__version__ = '6.0.3'
 
 #  Console colors.
 COLOR = {
@@ -180,14 +180,16 @@ class TinychatRTMPClient:
                     }
                 )
                 self.is_connected = True
+            except Exception as e:
+                log.error('connect error: %s' % e, exc_info=True)
+                self.is_connected = False
+                self.reconnect()
+                if config.DEBUG_MODE:
+                    traceback.print_exc()
+            finally:
                 if config.RESET_INIT_TIME:
                     self._init_time = time.time()
                 self.__callback()
-            except Exception as e:
-                log.error('connect error: %s' % e)
-                if config.DEBUG_MODE:
-                    traceback.print_exc()
-                self.reconnect()
 
     def disconnect(self):
         """ Closes the RTMP connection with the remote server. """
@@ -203,7 +205,7 @@ class TinychatRTMPClient:
                 traceback.print_exc()
 
     def reconnect(self):
-        """ Reconnect to a room with the connection parameters already set. """
+        """ Reconnect to the room. """
         reconnect_msg = '============ RECONNECTING IN ' + str(self._reconnect_delay) + ' SECONDS ============'
         log.info('reconnecting: %s' % reconnect_msg)
         self.console_write(COLOR['bright_cyan'], reconnect_msg)
@@ -221,13 +223,18 @@ class TinychatRTMPClient:
                 self.console_write(COLOR['bright_red'], 'Failed to login.')
             else:
                 self.console_write(COLOR['bright_green'], 'Login okay.')
-        log.debug('reconnecting: %s' % self.rtmp_parameter)
-        self.get_rtmp_parameters()
-        self.connect()
+        status = self.get_rtmp_parameters()
+        if status is 3:
+            self.connect()
+        else:
+            msg = 'failed to fetch rtmp parameters, status: %s' % status
+            log.error(msg)
+            if config.DEBUG_MODE:
+                self.console_write(COLOR['bright_red'], msg)
 
     def __callback(self):
         """ Callback loop reading RTMP messages from the RTMP stream. """
-        log.info('starting callback loop.')
+        log.info('starting callback loop. is_connected: %s' % self.is_connected)
         failures = 0
         amf0_data_type = -1
         amf0_data = None
@@ -259,7 +266,7 @@ class TinychatRTMPClient:
                 if create_stream_res:
                     msg = 'create stream response, stream_id: %s' % self.connection.stream_id
                     log.info(msg)
-                    self.send_publish()
+                    self.connection.publish(self._client_id)
                     if config.DEBUG_MODE:
                         self.console_write(COLOR['white'], msg)
                     continue
@@ -601,10 +608,10 @@ class TinychatRTMPClient:
             msg_cmd = decoded_msg.split(' ')
             if msg_cmd[0] == '/msg':
                 private_msg = ' '.join(msg_cmd[2:])
-                self.private_message_handler(msg_sender, private_msg.strip())
+                self.private_message_handler(private_msg.strip())
 
             elif msg_cmd[0] == '/reported':
-                self.on_reported(msg_sender, self.active_user.id)
+                self.on_reported(self.active_user.nick, self.active_user.id)
 
             elif msg_cmd[0] == '/mbs':
                 if self.active_user.is_mod:
@@ -665,13 +672,12 @@ class TinychatRTMPClient:
         self.console_write(COLOR['green'], '%s: %s ' % (self.active_user.nick, decoded_msg))
 
     # Private message Handler.
-    def private_message_handler(self, msg_sender, private_msg):
+    def private_message_handler(self, private_msg):
         """
         A user private message us.
-        :param msg_sender: str the user sending the private message.
         :param private_msg: str the private message.
         """
-        self.console_write(COLOR['white'], 'Private message from %s: %s' % (msg_sender, private_msg))
+        self.console_write(COLOR['white'], 'Private message from %s: %s' % (self.active_user.nick, private_msg))
 
     # Media Events.
     def on_media_broadcast_start(self, media_type, video_id, usr_nick):
@@ -816,7 +822,7 @@ class TinychatRTMPClient:
         """ Send the nick message. """
         if not self.nickname:
             self.nickname = string_util.create_random_string(5, 25)
-        self.console_write(COLOR['white'], 'Setting nick: %s' % self.nickname)
+        self.console_write(COLOR['bright_magenta'], 'Setting nick: %s' % self.nickname)
         self._send_command('nick', [u'' + self.nickname])
 
     def send_ban_msg(self, nick, uid=None):
@@ -859,29 +865,10 @@ class TinychatRTMPClient:
         if self._is_client_mod:
             self._send_command('owner_run', [u'_close' + nick])
 
-    def send_close_stream(self):
-        """ Send closeStream message. """
-        self.console_write(COLOR['white'], 'Sending closeStream message.')
-        self._send_command('closeStream')
-
-    def send_deletestream(self):  # EXPERIMENTAL
-        self.console_write(COLOR['white'], 'Sending deleteStream message.')
-        self._send_command('deleteStream', [1])
-
-    def send_play(self, user_id):  # EXPERIMENTAL
-        self.console_write(COLOR['white'], 'Sending play message for stream: %d.' % user_id)
-        self._send_command('play', [str(user_id)])
-
-    def send_publish(self):
-        """ Send publish message. """
-        self.console_write(COLOR['white'], 'Sending publish message.')
-        self._send_command('publish', [u'' + str(self._client_id), u'live'])
-
     # Media Message Functions
     def send_media_broadcast_start(self, media_type, video_id, time_point=0, private_nick=None):
         """
         Starts a media broadcast.
-        NOTE: This method replaces play_youtube and play_soundcloud
         :param media_type: str 'youTube' or 'soundCloud'
         :param video_id: str the media video ID.
         :param time_point: int where to start the media from in milliseconds.
@@ -896,7 +883,6 @@ class TinychatRTMPClient:
     def send_media_broadcast_close(self, media_type, private_nick=None):
         """
         Close a media broadcast.
-        NOTE: This method replaces stop_youtube and stop_soundcloud
         :param media_type: str 'youTube' or 'soundCloud'
         :param private_nick str if not None, send this message to this username only.
         """

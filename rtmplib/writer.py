@@ -48,16 +48,19 @@ class RtmpWriter:
         elif datatype == rtmp_type.DT_COMMAND:
             for command in message['command']:
                 encoder.writeElement(command)
-            if 'createStream' in message['command']:
-                self.send_msg(datatype, body_stream.getvalue())
-            elif 'closeStream' in message['command']:
-                self.send_msg(datatype, body_stream.getvalue(), st_id=self.stream_id)
+
+            if 'closeStream' in message['command']:
+                self.send_msg(datatype, body_stream.getvalue(), stream_id=self.stream_id)
+
             elif 'deleteStream' in message['command']:
-                self.send_msg(datatype, body_stream.getvalue(), st_id=self.stream_id)
+                self.send_msg(datatype, body_stream.getvalue(), stream_id=self.stream_id)
+
             elif 'publish' in message['command']:
-                self.send_msg(datatype, body_stream.getvalue(), st_id=self.stream_id)
+                self.send_msg(datatype, body_stream.getvalue(), stream_id=self.stream_id)
+
             elif 'play' in message['command']:
-                self.send_msg(datatype, body_stream.getvalue(), ch_id=1, st_id=8)
+                self.send_msg(datatype, body_stream.getvalue(), chunk_id=8, stream_id=self.stream_id)
+
             else:
                 self.send_msg(datatype, body_stream.getvalue())
 
@@ -77,8 +80,6 @@ class RtmpWriter:
             self.send_msg(datatype, body_stream.getvalue())
         else:
             assert False, message
-
-        # self.send_msg(datatype, body_stream.getvalue())
 
     @staticmethod
     def write_shared_object_event(event, body_stream):
@@ -108,7 +109,7 @@ class RtmpWriter:
         body_stream.write_ulong(len(inner_stream))
         body_stream.write(inner_stream.getvalue())
 
-    def send_msg(self, data_type, body, ch_id=3, st_id=0, timestamp=0):
+    def send_msg(self, data_type, body, chunk_id=3, stream_id=0, timestamp=0):
         """
         Helper method that send the specified message into the stream. Takes
         care to prepend the necessary headers and split the message into
@@ -116,16 +117,15 @@ class RtmpWriter:
         """
         # Values that just work. :-)
         if 1 <= data_type <= 7:
-            channel_id = 2
-            stream_id = 0
+            _channel_id = 2
+            _stream_id = 0
         else:
-            channel_id = ch_id
-            stream_id = st_id
-        timestamp = timestamp
+            _channel_id = chunk_id
+            _stream_id = stream_id
 
         _header = header.Header(
-            channel_id=channel_id,
-            stream_id=stream_id,
+            channel_id=_channel_id,  # i am pretty sure this is the chunk stream ID. Rename in header?
+            stream_id=_stream_id,
             data_type=data_type,
             body_length=len(body),
             timestamp=timestamp)

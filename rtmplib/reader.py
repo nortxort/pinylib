@@ -123,10 +123,6 @@ class RtmpReader:
                 commands.append(decoder.readElement())
             ret['command'] = commands
 
-            # stream id test
-            if len(ret['command']) is 4 and ret['command'][0] == '_result' and type(ret['command'][3]) is int:
-                log.info('(1) possible streamId received: %s' % ret['command'][3])
-
         elif ret['msg'] == rtmp_type.DT_AMF3_COMMAND:
             decoder = amf3.Decoder(body_stream)
             commands = []

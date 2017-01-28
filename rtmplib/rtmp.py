@@ -56,6 +56,7 @@ class RtmpClient:
         self.reader = None
 
         self.stream_id = 0
+        self._transaction_id = 2
 
     @staticmethod
     def create_random_bytes(length, readable=False):
@@ -170,7 +171,7 @@ class RtmpClient:
     def is_create_stream_response(self, amf_data):
         if amf_data['msg'] == rtmp_type.DT_COMMAND and len(amf_data['command']) is 4:
             if amf_data['command'][0] == '_result' and type(amf_data['command'][3]) is int:
-                log.info('(2) possible create stream response stream id recivied: %s' % amf_data['command'][3])
+                log.info('create stream response received, stream id : %s' % amf_data['command'][3])
                 self.stream_id = amf_data['command'][3]
                 self.writer.stream_id = self.stream_id
                 return True
@@ -236,11 +237,11 @@ class RtmpClient:
         so.use(self.reader, self.writer)
         self.shared_objects.append(so)
 
-    def send_ping_request(self):
+    def ping_request(self):
         """
         Send a PING request.
         NOTE: I think its highly unlikely that a client would send this to a server,
-        it's usally the other way around, the sever sends this to the client to make sure the client is alive.
+        it's usually the other way around, the sever sends this to the client to make sure the client is alive.
         It does seem like some servers(all?) respond to this.
         """
         msg = {
@@ -252,5 +253,50 @@ class RtmpClient:
         self.writer.write(msg)
         self.writer.flush()
 
+    def _get_next_transaction_id(self):
+        """ Get the next transaction ID. """
+        transaction_id = self._transaction_id
+        self._transaction_id += 1
+        if self._transaction_id > 8388607:
+            self._transaction_id = 2
+        return transaction_id
+
     def createstream(self):
-        self.call('createStream')
+        """ Send createStream message. """
+        msg = {
+            'msg': rtmp_type.DT_COMMAND,
+            'command': ['createStream', self._get_next_transaction_id(), None]
+        }
+        self.writer.write(msg)
+        self.writer.flush()
+
+    def closestream(self):
+        """ Send closeStream message. """
+        msg = {
+            'msg': rtmp_type.DT_COMMAND,
+            'command': ['closeStream', 0, None]
+        }
+        self.writer.write(msg)
+        self.writer.flush()
+
+    def deletestream(self):
+        """ Send deleteStream message. """
+        msg = {
+            'msg': rtmp_type.DT_COMMAND,
+            'command': ['deleteStream', 0, None]
+        }
+        self.writer.write(msg)
+        self.writer.flush()
+
+    def publish(self, publishing_name, publishing_type='live'):
+        """
+        Send publish message.
+        :param publishing_name: the name of the stream to publish
+        :param publishing_type: str publishing type. 'live, 'record' or 'append'
+        """
+        msg = {
+            'msg': rtmp_type.DT_COMMAND,
+            'command': ['publish', 0, None, str(publishing_name), publishing_type]
+        }
+        self.writer.write(msg)
+        self.writer.flush()

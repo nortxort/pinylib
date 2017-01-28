@@ -59,6 +59,18 @@ class Users:
         return _mods
 
     @property
+    def signed_in(self):
+        """
+        All user in the room using an account.
+        :return: list all the signed in users objects (User) in the room.
+        """
+        _signed_ins = []
+        for user in self.all:
+            if self.all[user].account:
+                _signed_ins.append(self.all[user])
+        return _signed_ins
+
+    @property
     def lurkers(self):
         """
         All the lurkers in the room.
