@@ -154,4 +154,4 @@ class Users:
         for user in self.all:
             if str(self.all[user].id) == user_id:
                 return self.all[user]
-            return None
+        return None

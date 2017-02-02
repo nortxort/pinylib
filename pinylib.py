@@ -165,7 +165,7 @@ class TinychatRTMPClient:
                     port=self.rtmp_parameter['port'],
                     tc_url=self.rtmp_parameter['tcurl'],
                     app=self.rtmp_parameter['app'],
-                    page_url=self.embed_url.format(config.SWF_VERSION),
+                    page_url=self.embed_url.format(self.roomname),
                     swf_url=self.swf_url.format(config.SWF_VERSION),
                     proxy=self._proxy,
                     is_win=True)
@@ -181,7 +181,7 @@ class TinychatRTMPClient:
                 )
                 self.is_connected = True
             except Exception as e:
-                log.error('connect error: %s' % e, exc_info=True)
+                log.critical('connect error: %s' % e, exc_info=True)
                 self.is_connected = False
                 self.reconnect()
                 if config.DEBUG_MODE:
@@ -1005,7 +1005,7 @@ class TinychatRTMPClient:
                 if self._is_client_mod:
                     self.rtmp_parameter['greenroom'] = conf['greenroom']
                     self._b_password = conf['bpassword']
-            log.info('recv configuration: %s' % conf)
+            log.debug('recv configuration: %s' % conf)
         self.start_auto_job_timer()
 
     def start_auto_job_timer(self):
