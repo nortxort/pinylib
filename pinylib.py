@@ -12,7 +12,7 @@ import config
 from rtmplib import rtmp
 from util import core, string_util, file_handler
 
-__version__ = '6.0.3'
+__version__ = '6.1.0'
 
 #  Console colors.
 COLOR = {
@@ -55,23 +55,17 @@ class TinychatRTMPClient:
     embed_url = u'http://tinychat.com/{0}'
     rtmp_parameter = dict()
 
-    def __init__(self, roomname, **kwargs):
+    def __init__(self, roomname, nick=None, account='', password=None, room_pass=None, proxy=None):
         self.roomname = roomname
-        self.nickname = kwargs.get('nick')
-        self.account = kwargs.get('account', '')
-        self.password = kwargs.get('password')
-        self.room_pass = kwargs.get('room_pass')
+        self.nickname = nick
+        self.account = account
+        self.password = password
+        self.room_pass = room_pass
         self.connection = None
         self.is_connected = False
         self.users = user.Users()
         self.active_user = None
-        self.rtmp_parameter['tcurl'] = kwargs.get('tcurl')
-        self.rtmp_parameter['app'] = kwargs.get('app')
-        self.rtmp_parameter['roomtype'] = kwargs.get('roomtype')
-        self.rtmp_parameter['ip'] = kwargs.get('ip')
-        self.rtmp_parameter['port'] = kwargs.get('port')
-        self.rtmp_parameter['greenroom'] = False
-        self._proxy = kwargs.get('proxy')
+        self._proxy = proxy
         self._client_id = None
         self._bauth_key = None
         self._is_reconnected = False
@@ -80,6 +74,9 @@ class TinychatRTMPClient:
         self._b_password = None
         self._reconnect_delay = config.RECONNECT_DELAY
         self._init_time = time.time()
+
+        self.green_connection = None
+        self.is_green_connected = False
 
     def console_write(self, color, message):
         """
@@ -189,48 +186,145 @@ class TinychatRTMPClient:
             finally:
                 if config.RESET_INIT_TIME:
                     self._init_time = time.time()
+                if self.rtmp_parameter['greenroom']:
+                    threading.Thread(target=self.__connect_green).start()  #
                 self.__callback()
 
-    def disconnect(self):
+    def __connect_green(self):
+        """ Connect to the greenroom. """
+        if not self.is_green_connected:
+            log.debug('connecting to greenroom: %s' % self.roomname)
+            try:
+                self.green_connection = rtmp.RtmpClient(
+                    ip=self.rtmp_parameter['ip'],
+                    port=self.rtmp_parameter['port'],
+                    tc_url=self.rtmp_parameter['tcurl'],
+                    app=self.rtmp_parameter['app'],
+                    page_url=self.embed_url.format(self.roomname),
+                    swf_url=self.swf_url.format(config.SWF_VERSION),
+                    proxy=self._proxy,
+                    is_win=True)
+                self.green_connection.connect(
+                    {
+                        'account': '',
+                        'type': self.rtmp_parameter['roomtype'],
+                        'prefix': u'greenroom',
+                        'room': self.roomname,
+                        'version': self.desktop_version.format(config.SWF_VERSION),
+                        'cookie': ''
+                    }
+                )
+                self.is_green_connected = True
+            except Exception as gce:
+                log.critical('greenroom connect error: %s' % gce, exc_info=True)
+                self.is_green_connected = False
+                self.reconnect(greenroom=True)  #
+                if config.DEBUG_MODE:
+                    traceback.print_exc()
+            finally:
+                self.__green_callback()  #
+
+    def disconnect(self, greenroom=False):
         """ Closes the RTMP connection with the remote server. """
         log.debug('disconnecting from server.')
         try:
-            self.is_connected = False
-            self._bauth_key = None
-            self.users.clear()
-            self.connection.shutdown()
+            if greenroom:
+                log.debug('disconnecting from greenroom')
+                self.is_green_connected = False
+                self.green_connection.shutdown()
+            else:
+                self.is_connected = False
+                self._bauth_key = None
+                self.users.clear()
+                self.connection.shutdown()
         except Exception as e:
             log.error('disconnect error: %s' % e, exc_info=True)
             if config.DEBUG_MODE:
                 traceback.print_exc()
 
-    def reconnect(self):
+    def reconnect(self, greenroom=False):
         """ Reconnect to the room. """
-        reconnect_msg = '============ RECONNECTING IN ' + str(self._reconnect_delay) + ' SECONDS ============'
-        log.info('reconnecting: %s' % reconnect_msg)
-        self.console_write(COLOR['bright_cyan'], reconnect_msg)
-        self._is_reconnected = True
-        self.disconnect()
-        time.sleep(self._reconnect_delay)
-
-        # increase reconnect_delay after each reconnect.
-        self._reconnect_delay *= 2
-        if self._reconnect_delay > 900:
-            self._reconnect_delay = config.RECONNECT_DELAY
-
-        if self.account and self.password:
-            if not self.login():
-                self.console_write(COLOR['bright_red'], 'Failed to login.')
-            else:
-                self.console_write(COLOR['bright_green'], 'Login okay.')
-        status = self.get_rtmp_parameters()
-        if status is 3:
-            self.connect()
+        if greenroom:
+            self.disconnect(greenroom=True)
+            time.sleep(config.RECONNECT_DELAY)
+            self.__connect_green()  #
         else:
-            msg = 'failed to fetch rtmp parameters, status: %s' % status
-            log.error(msg)
-            if config.DEBUG_MODE:
-                self.console_write(COLOR['bright_red'], msg)
+            reconnect_msg = '============ RECONNECTING IN %s SECONDS ============' % self._reconnect_delay
+            log.info('reconnecting: %s' % reconnect_msg)
+            self.console_write(COLOR['bright_cyan'], reconnect_msg)
+            self._is_reconnected = True
+            self.disconnect()
+            time.sleep(self._reconnect_delay)
+
+            # increase reconnect_delay after each reconnect.
+            self._reconnect_delay *= 2
+            if self._reconnect_delay > 900:
+                self._reconnect_delay = config.RECONNECT_DELAY
+
+            if self.account and self.password:
+                if not self.login():
+                    self.console_write(COLOR['bright_red'], 'Failed to login.')
+                else:
+                    self.console_write(COLOR['bright_green'], 'Login okay.')
+            status = self.get_rtmp_parameters()
+            if status is 3:
+                self.connect()
+            else:
+                msg = 'failed to fetch rtmp parameters, status: %s' % status
+                log.error(msg)
+                if config.DEBUG_MODE:
+                    self.console_write(COLOR['bright_red'], msg)
+
+    def __green_callback(self):
+        log.info('starting greenroom callback. is_green_connected: %s' % self.is_green_connected)
+        fails = 0
+        amf0_data = None
+        while self.is_green_connected:
+            try:
+                amf0_data = self.green_connection.reader.next()
+            except Exception as e:
+                fails += 1
+                log.error('greenroom amf data read error: %s %s' % (fails, e), exc_info=True)
+                if fails == 2:
+                    if config.DEBUG_MODE:
+                        traceback.print_exc()
+                    self.reconnect(greenroom=True)  #
+                    break
+            else:
+                fails = 0
+            try:
+                handled = self.green_connection.handle_packet(amf0_data)
+                if handled:
+                    msg = 'handled greenroom packet: %s' % amf0_data
+                    log.debug(msg)
+                    if config.DEBUG_MODE:
+                        self.console_write(COLOR['white'], msg)
+                    continue
+
+                amf0_cmd = amf0_data['command']
+                cmd = amf0_cmd[0]
+
+                if cmd == '_result':
+                    self.on_result(amf0_cmd, greenroom=True)
+
+                elif cmd == '_error':
+                    self.on_error(amf0_cmd, greenroom=True)
+
+                elif cmd == 'notice':
+                    notice_msg = amf0_cmd[3]
+                    notice_msg_id = amf0_cmd[4]
+                    if notice_msg == 'avon':
+                        avon_name = amf0_cmd[5]
+                        self.on_avon(notice_msg_id, avon_name, greenroom=True)
+                else:
+                    if config.DEBUG_MODE:
+                        self.console_write(COLOR['white'], 'ignoring greenroom command: %s' % cmd)
+
+            except Exception as gce:
+                log.error('general greenroom callback error: %s' % gce, exc_info=True)
+                if config.DEBUG_MODE:
+                    traceback.print_exc()
+                self.reconnect(greenroom=True)  #
 
     def __callback(self):
         """ Callback loop reading RTMP messages from the RTMP stream. """
@@ -414,8 +508,10 @@ class TinychatRTMPClient:
                     traceback.print_exc()
 
     # Callback Event Methods.
-    def on_result(self, result_info):
+    def on_result(self, result_info, greenroom=False):
         if config.DEBUG_MODE:
+            if greenroom:
+                self.console_write(COLOR['white'], '## Greenroom result..')
             for list_item in result_info:
                 if type(list_item) is rtmp.pyamf.ASObject:
                     for k in list_item:
@@ -423,8 +519,10 @@ class TinychatRTMPClient:
                 else:
                     self.console_write(COLOR['white'], str(list_item))
 
-    def on_error(self, error_info):
+    def on_error(self, error_info, greenroom=False):
         if config.DEBUG_MODE:
+            if greenroom:
+                self.console_write(COLOR['bright_red'], '## Greenroom error..')
             for list_item in error_info:
                 if type(list_item) is rtmp.pyamf.ASObject:
                     for k in list_item:
@@ -531,8 +629,14 @@ class TinychatRTMPClient:
     def on_owner(self):
         pass
 
-    def on_avon(self, uid, name):
-        self.console_write(COLOR['cyan'], '%s:%s is broadcasting.' % (name, uid))
+    def on_avon(self, uid, name, greenroom=False):
+        if greenroom:
+            _user = self.users.search_by_id(name)
+            if _user is not None:
+                self.console_write(COLOR['bright_yellow'], '%s:%s is waiting in the greenroom' %
+                                   (_user.nick, _user.id))
+        else:
+            self.console_write(COLOR['cyan'], '%s:%s is broadcasting.' % (name, uid))
 
     def on_pro(self, uid):
         _user = self.users.search_by_id(uid)
