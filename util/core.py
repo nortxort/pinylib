@@ -1,4 +1,5 @@
 """ Contains functions to fetch info from tinychat's API. """
+import logging
 import random
 import time
 import webbrowser
@@ -6,6 +7,8 @@ from xml.dom.minidom import parseString
 from xml.parsers.expat import ExpatError
 
 from util import web
+
+log = logging.getLogger(__name__)
 
 
 def delete_login_cookies():
@@ -34,6 +37,7 @@ def post_login(account, password, proxy=None):
         'remember': '1'
     }
     response = web.http_post(post_url=url, post_data=form_data, follow_redirect=False, proxy=proxy)
+    log.debug('response: %s' % response)
     return response
 
 
@@ -52,6 +56,7 @@ def get_roomconfig_xml(room, roompass=None, proxy=None):
         xmlurl = 'https://apl.tinychat.com/api/find.room/%s?site=tinychat&url=tinychat.com' % room
 
     response = web.http_get(xmlurl, proxy=proxy)
+    log.debug('response: %s' % response)
     if response['content'] is not None:
         try:
             xml = parseString(response['content'])
@@ -66,11 +71,9 @@ def get_roomconfig_xml(room, roompass=None, proxy=None):
             else:
                 roomtype = root.getAttribute('roomtype')
                 tc_url = root.getAttribute('rtmp')
-                rtmp_parts = tc_url.split('/')
-                app = rtmp_parts[3]
-                ip_port_parts = rtmp_parts[2].split(':')
-                ip = ip_port_parts[0]
-                port = int(ip_port_parts[1])
+                ip = tc_url.split('/')[2].split(':')[0]
+                port = int(tc_url.split('/')[2].split(':')[1])
+                app = tc_url.split('/')[3]
 
                 if 'bpassword' in response['content']:
                     broadcast_pass = root.getAttribute('bpassword')
@@ -111,11 +114,9 @@ def get_greenroom_xml(room, proxy=None):
         else:
             roomtype = root.getAttribute('roomtype')
             tc_url = root.getAttribute('rtmp')
-            rtmp_parts = tc_url.split('/')
-            app = rtmp_parts[3]
-            ip_port_parts = rtmp_parts[2].split(':')
-            ip = ip_port_parts[0]
-            port = int(ip_port_parts[1])
+            ip = tc_url.split('/')[2].split(':')[0]
+            port = int(tc_url.split('/')[2].split(':')[1])
+            app = tc_url.split('/')[3]
 
             return {
                 'tcurl': tc_url,
@@ -134,6 +135,7 @@ def tinychat_user_info(tc_account):
     """
     url = 'https://tinychat.com/api/tcinfo?username=%s' % tc_account
     response = web.http_get(url=url, json=True)
+    log.debug('respnse: %s' % response)
     if response['json'] is not None:
         if 'error' not in response['json']:
             username = response['json']['username']
@@ -162,19 +164,16 @@ def spy_info(room):
     The info shows how many mods, broadcasters and total users(list)
 
     :param room: str the room name to get spy info for.
-    :return: dict{'mod_count', 'broadcaster_count', 'total_count', list('all')} or PW on password protected room.,
-    or None on failure or empty room.
+    :return: dict{'mod_count', 'broadcaster_count', 'total_count', list('users')} or {'error'}
     """
     url = 'https://api.tinychat.com/%s.json' % room
-    check = get_roomconfig_xml(room)
-    if check == 'PW':
-        return check
-    else:
-        try:
-            response = web.http_get(url, json=True)
-            mod_count = str(response['json']['mod_count'])
-            broadcaster_count = str(response['json']['broadcaster_count'])
-            total_count = str(response['json']['total_count'])
+    response = web.http_get(url, json=True)
+    log.debug('response: %s' % response)
+    if response['json'] is not None:
+        if 'error' not in response['json']:
+            mod_count = response['json']['mod_count']
+            broadcaster_count = response['json']['broadcaster_count']
+            total_count = response['json']['total_count']
             if total_count > 0:
                 users = response['json']['names']
                 return {
@@ -183,8 +182,8 @@ def spy_info(room):
                     'total_count': total_count,
                     'users': users
                 }
-        except KeyError:
-            return None
+        else:
+            return {'error': response['json']['error']}
 
 
 def get_bauth_token(roomname, nick, uid, greenroom, proxy=None):
@@ -204,6 +203,7 @@ def get_bauth_token(roomname, nick, uid, greenroom, proxy=None):
         xmlurl = 'https://tinychat.com/api/broadcast.pw?site=tinychat&name=%s&nick=%s&id=%s' % (roomname, nick, uid)
 
     response = web.http_get(xmlurl, proxy=proxy)
+    log.debug('response: %s' % response)
     if response['content'] is not None:
         xml = parseString(response['content'])
         root = xml.getElementsByTagName('response')[0]
@@ -225,6 +225,7 @@ def get_captcha_key(roomname, uid, proxy=None):
     """
     url = 'https://tinychat.com/api/captcha/check.php?room=tinychat^%s&guest_id=%s' % (roomname, uid)
     response = web.http_get(url, json=True, proxy=proxy)
+    log.debug('response: %s' % response)
     if response['json'] is not None:
         if 'key' in response['json']:
             return response['json']['key']
@@ -244,6 +245,7 @@ def get_cauth_cookie(roomname, proxy=None):
     ts = int(round(time.time() * 1000))
     url = 'https://tinychat.com/cauth?room=%s&t=%s' % (roomname, ts)
     response = web.http_get(url, json=True, proxy=proxy)
+    log.debug('response: %s' % response)
     if response['json'] is not None:
         if 'cookie' in response['json']:
             return response['json']['cookie']
@@ -260,6 +262,7 @@ def recaptcha(proxy=None):
     t = str(random.uniform(0.9, 0.10))
     url = 'https://tinychat.com/cauth/captcha?%s' % t
     response = web.http_get(url, json=True, proxy=proxy)
+    log.debug('response: %s' % response)
     if response['json'] is not None:
         if response['json']['need_to_solve_captcha'] == 1:
             link = 'https://tinychat.com/cauth/recaptcha?token=%s' % response['json']['token']
