@@ -12,7 +12,7 @@ import config
 from rtmplib import rtmp
 from util import core, string_util, file_handler
 
-__version__ = '6.1.0'
+__version__ = '6.1.1'
 
 #  Console colors.
 COLOR = {
@@ -62,7 +62,9 @@ class TinychatRTMPClient:
         self.password = password
         self.room_pass = room_pass
         self.connection = None
+        self.green_connection = None
         self.is_connected = False
+        self.is_green_connected = False
         self.users = user.Users()
         self.active_user = None
         self._proxy = proxy
@@ -74,9 +76,6 @@ class TinychatRTMPClient:
         self._b_password = None
         self._reconnect_delay = config.RECONNECT_DELAY
         self._init_time = time.time()
-
-        self.green_connection = None
-        self.is_green_connected = False
 
     def console_write(self, color, message):
         """
@@ -186,7 +185,7 @@ class TinychatRTMPClient:
             finally:
                 if config.RESET_INIT_TIME:
                     self._init_time = time.time()
-                if self.rtmp_parameter['greenroom']:
+                if self.rtmp_parameter['greenroom'] and not self.is_green_connected:
                     threading.Thread(target=self.__connect_green).start()  #
                 self.__callback()
 

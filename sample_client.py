@@ -74,6 +74,8 @@ def main():
             cmd = msg_parts[0].lower().strip()
             if cmd == '/q':
                 client.disconnect()
+                if client.is_green_connected:
+                    client.disconnect(greenroom=True)
             elif cmd == '/a':
                 if len(client.users.signed_in) is 0:
                     print ('No signed in users in the room.')
@@ -113,4 +115,3 @@ if __name__ == '__main__':
     else:
         log.addHandler(logging.NullHandler())
     main()
-    
