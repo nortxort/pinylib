@@ -11,36 +11,6 @@ from util import web
 log = logging.getLogger(__name__)
 
 
-def delete_login_cookies():
-    """ Delete tinychat login cookies. """
-    cookies = ['pass', 'hash', 'user']
-    for cookie in cookies:
-        web.delete_cookie(cookie)
-
-
-def post_login(account, password, proxy=None):
-    """
-    Post tinychat login info.
-    :param account: str tinychat account name.
-    :param password: str tinychat account password.
-    :param proxy: str(ipv4:port) use a proxy for this request
-    :return: dict{'content', 'cookies', 'headers', 'status_code'} or None on error.
-    """
-    url = 'https://tinychat.com/login'
-    form_data = {
-        'form_sent': '1',
-        'referer': '',
-        'next': '',
-        'username': account,
-        'password': password,
-        'passwordfake': 'Password',
-        'remember': '1'
-    }
-    response = web.http_post(post_url=url, post_data=form_data, follow_redirect=False, proxy=proxy)
-    log.debug('response: %s' % response)
-    return response
-
-
 def get_roomconfig_xml(room, roompass=None, proxy=None):
     """
     Finds room configuration for a given room name.

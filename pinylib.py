@@ -7,12 +7,13 @@ import traceback
 
 from colorama import init, Fore, Style
 
+import auth
 import user
 import config
 from rtmplib import rtmp
 from util import core, string_util, file_handler
 
-__version__ = '6.1.1'
+__version__ = '6.1.2'
 
 #  Console colors.
 COLOR = {
@@ -129,24 +130,15 @@ class TinychatRTMPClient:
 
     def login(self):
         """
-        Try to login to tinychat
-        :return True if logged in, else False
+        Login to tinychat.
+        :return: True if logged in else False
         """
+        _account = auth.Account(account=self.account, password=self.password, proxy=self._proxy)
         if self.account and self.password:
-            is_logged_in = core.web.has_cookie('pass')
-            if is_logged_in:
-                is_login_expired = core.web.is_cookie_expired('user')
-                if is_login_expired:
-                    post_login = core.post_login(self.account, self.password, proxy=self._proxy)
-                    if 'hash' in post_login['cookies']:
-                        return True
-                    return False
+            if _account.is_logged_in():
                 return True
-            post_login = core.post_login(self.account, self.password, proxy=self._proxy)
-            if 'hash' in post_login['cookies']:
-                return True
-            return False
-        return False
+            _account.login()
+        return _account.is_logged_in()
 
     def connect(self):
         """ Attempts to make a RTMP connection with the given connection parameters. """
@@ -632,9 +624,13 @@ class TinychatRTMPClient:
         if greenroom:
             _user = self.users.search_by_id(name)
             if _user is not None:
+                _user.is_waiting = True
                 self.console_write(COLOR['bright_yellow'], '%s:%s is waiting in the greenroom' %
                                    (_user.nick, _user.id))
         else:
+            _user = self.users.search(name)
+            if _user is not None and _user.is_waiting:
+                _user.is_waiting = False
             self.console_write(COLOR['cyan'], '%s:%s is broadcasting.' % (name, uid))
 
     def on_pro(self, uid):
@@ -1108,6 +1104,13 @@ class TinychatRTMPClient:
                 if self._is_client_mod:
                     self.rtmp_parameter['greenroom'] = conf['greenroom']
                     self._b_password = conf['bpassword']
+                    if conf['greenroom'] and not self.is_green_connected:
+                        # if the greenroom has been enabled after we joined the room.
+                        threading.Thread(target=self.__connect_green).start()
+                    elif not conf['greenroom'] and self.is_green_connected:
+                        # no need to keep the greenroom connection open
+                        # if it is not enabled anymore.
+                        self.disconnect(greenroom=True)
             log.debug('recv configuration: %s' % conf)
         self.start_auto_job_timer()
 
