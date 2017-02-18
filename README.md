@@ -11,7 +11,7 @@ The file [pinylib.py](https://github.com/nortxort/pinylib/blob/master/pinylib.py
 
 Examples shown here, assumes you are using windows.
 
-pinylib was developed using [python 2.7](https://www.python.org/downloads/windows/ "python for windows") so this is the recomended python interpreter. If you do not already have that installed, install if from the link.
+pinylib was developed using [python 2.7.10](https://www.python.org/downloads/windows/ "python for windows") so this is the recomended python interpreter. Later versions of python should work to, aslong as they are from the 2.7 family. 
 
 ### Requirements
 
@@ -33,6 +33,16 @@ For more info, see the [wiki](https://github.com/nortxort/pinylib/wiki/Requireme
 
 Run the client by typing `python path\to\sample_client.py` in a command prompt.
 
+## Submitting an issue.
+Issues posted should be about pinylib and **only** pinylib. 
+
+Before submitting an issue, please read thru the [issues](https://github.com/nortxort/pinylib/issues) section, including already closed issues. If you do not find an answer to your issue, then please provide as much info as possible when opening an issue. Possible info could be:
+
+* Python version including subversion.
+* Pinylib version.
+* Debug log.
+* How to reproduce the issue/error.
+
 
 ## Author
 
@@ -42,7 +52,7 @@ Run the client by typing `python path\to\sample_client.py` in a command prompt.
 
 The MIT License (MIT)
 
-Copyright (c) 2017 nortxort
+Copyright (c) 2016 nortxort
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software
 and associated documentation files (the "Software"), to deal in the Software without restriction,
