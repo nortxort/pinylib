@@ -1,4 +1,4 @@
-""" Contains functions to make http GET and http POST with. version 0.0.5 """
+""" Contains functions to make http GET and http POST with. version 0.0.6 """
 import time
 import logging
 import requests
@@ -10,7 +10,7 @@ log = logging.getLogger(__name__)
 
 
 #  A session that all requests will use...apparently not.
-_request_session = requests.session()
+__request_session = requests.session()
 
 
 def is_cookie_expired(cookie_name):
@@ -23,7 +23,7 @@ def is_cookie_expired(cookie_name):
     if cookie_name:
         expires = int
         timestamp = int(time.time())
-        for cookie in _request_session.cookies:
+        for cookie in __request_session.cookies:
             if cookie.name == cookie_name:
                 expires = cookie.expires
             else:
@@ -43,9 +43,9 @@ def delete_cookie(cookie_name):
     :param cookie_name: str the cookie name.
     :return: True if deleted else False
     """
-    if cookie_name in _request_session.cookies:
-        del _request_session.cookies[cookie_name]
-        log.debug('deleting cookie: %s session cookies: %s' % (cookie_name, _request_session.cookies))
+    if cookie_name in __request_session.cookies:
+        del __request_session.cookies[cookie_name]
+        log.debug('deleting cookie: %s session cookies: %s' % (cookie_name, __request_session.cookies))
         return True
     return False
 
@@ -56,9 +56,9 @@ def has_cookie(cookie_name):
     :param cookie_name: str the name of the cookie.
     :return: object request.session.cookie[cookie_name] or False if no cookie.
      """
-    if cookie_name in _request_session.cookies:
-        log.debug('cookie found: %s' % _request_session.cookies[cookie_name])
-        return _request_session.cookies[cookie_name]
+    if cookie_name in __request_session.cookies:
+        log.debug('cookie found: %s' % __request_session.cookies[cookie_name])
+        return __request_session.cookies[cookie_name]
     log.debug('no cookie named: %s found.' % cookie_name)
     return False
 
@@ -91,7 +91,7 @@ def http_get(url, **kwargs):
     json_response = None
 
     try:
-        gr = _request_session.request(method='GET', url=url, headers=default_header, proxies=proxy, timeout=timeout)
+        gr = __request_session.request(method='GET', url=url, headers=default_header, proxies=proxy, timeout=timeout)
         if json:
             json_response = gr.json()
     except ValueError as ve:
@@ -99,7 +99,7 @@ def http_get(url, **kwargs):
     except (requests.ConnectionError, requests.RequestException) as re:
         log.error('http_get error: %s' % re)
     finally:
-        log.debug('cookies: %s' % _request_session.cookies)
+        log.debug('cookies: %s' % __request_session.cookies)
         if gr is None:
             return dict(content=None, json=None,
                         cookies=None, headers=None, status_code=None)
@@ -144,7 +144,7 @@ def http_post(post_url, post_data, **kwargs):
         json_response = None
 
         try:
-            pr = _request_session.request(method='POST', url=post_url, data=post_data, headers=default_header,
+            pr = __request_session.request(method='POST', url=post_url, data=post_data, headers=default_header,
                                           allow_redirects=redirect, proxies=proxy, timeout=timeout, stream=stream)
             if json:
                 json_response = pr.json()
@@ -153,7 +153,7 @@ def http_post(post_url, post_data, **kwargs):
         except (requests.HTTPError, requests.RequestException) as pe:
             log.error('http_post error %s' % pe)
         finally:
-            log.debug('cookies: %s' % _request_session.cookies)
+            log.debug('cookies: %s' % __request_session.cookies)
             if pr is None:
                 return dict(content=None, json=None,
                             cookies=None, headers=None, status_code=None)

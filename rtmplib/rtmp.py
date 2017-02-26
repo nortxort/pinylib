@@ -12,6 +12,11 @@ from . import packet, reader, writer, rtmp_type, socks
 log = logging.getLogger(__name__)
 
 
+class AmfDataReadError(Exception):
+    """ Raised on failure to read next amf data packet. """
+    pass
+
+
 class FileDataTypeMixIn(pyamf.util.pure.DataTypeMixIn):
     """
     Provides a wrapper for a file object that enables reading and writing of raw
@@ -47,6 +52,7 @@ class RtmpClient:
         self.swf_url = kwargs.get('swf_url', u'')
         self.proxy = kwargs.get('proxy', '')
         self.is_win = kwargs.get('is_win', False)
+        self.handle = kwargs.get('handle', True)
         self.flash_version = kwargs.get('flash_version', 'WIN 22.0.0.209')
         self.shared_objects = []
         self.socket = None
@@ -60,7 +66,15 @@ class RtmpClient:
 
     @staticmethod
     def create_random_bytes(length, readable=False):
-        """ Creates random bytes for the handshake. """
+        """ Creates random bytes for the handshake sequence.
+
+        :param length: The length of the random bytes.
+        :type length: int
+        :param readable: Should the byte be readable or not.
+        :type readable: bool
+        :return: A string of random bytes
+        :rtype: str
+        """
         ran_bytes = ''
         i, j = 0, 0xff
         if readable:
@@ -70,7 +84,7 @@ class RtmpClient:
         return ran_bytes
 
     def handshake(self):
-        """ Perform the handshake sequence with the server. """
+        """ Perform the handshake sequence with the remote server. """
         self.stream.write_uchar(3)
         c1 = packet.Handshake()
         c1.first = 0
@@ -93,8 +107,12 @@ class RtmpClient:
         s2 = packet.Handshake()
         s2.decode(self.stream)
 
-    def connect_rtmp(self, connect_params):
-        """ Initiate a NetConnection with a Flash Media Server. """
+    def _connect_rtmp(self, connect_params):
+        """ Initiate a NetConnection with a Flash Media Server.
+
+        :param connect_params: A list or dict containing application specific connect parameters.
+        :type connect_params: dict
+        """
         msg = {
             'msg': rtmp_type.DT_COMMAND,
             'command':
@@ -124,8 +142,30 @@ class RtmpClient:
         self.writer.write(msg)
         self.writer.flush()
 
+    def amf(self):
+        """ Read the next amf packet from the stream.
+
+        :return: amf data packet.
+        :rtype: dict
+        :raises AmfDataReadError on read error.
+        """
+        try:
+            amf_data = self.reader.next()
+            if self.handle:
+                if self.handle_packet(amf_data):
+                    log.debug('handled amf data: %s' % amf_data)
+            return amf_data
+        except Exception as e:
+            raise AmfDataReadError(e)
+
     def handle_packet(self, amf_data):
-        """ Handle packets based on data type."""
+        """ Handle packets based on data type.
+
+        :param amf_data: amf data from the remote server.
+        :type amf_data: dict
+        :return: True if the amf data was handled, else False.
+        :rtype: bool
+        """
         if amf_data['msg'] == rtmp_type.DT_USER_CONTROL and amf_data['event_type'] == rtmp_type.UC_PING_REQUEST:
             resp = {
                 'msg': rtmp_type.DT_USER_CONTROL,
@@ -137,9 +177,8 @@ class RtmpClient:
             return True
 
         elif amf_data['msg'] == rtmp_type.DT_USER_CONTROL and amf_data['event_type'] == rtmp_type.UC_PING_RESPONSE:
-            unpacked_tpl = struct.unpack('>I', amf_data['event_data'])
-            unpacked_response = unpacked_tpl[0]
-            log.debug('ping response from server %s' % unpacked_response)
+            ping_response = struct.unpack('>I', amf_data['event_data'])[0]
+            log.debug('ping response from server %s' % ping_response)
             return True
 
         elif amf_data['msg'] == rtmp_type.DT_WINDOW_ACK_SIZE:
@@ -167,8 +206,14 @@ class RtmpClient:
         else:
             return False
 
-    # create stream test
     def is_create_stream_response(self, amf_data):
+        """ Check amf data to determine if it is a createStream response.
+
+        :param amf_data: amf data from the remote server.
+        :type amf_data: dict
+        :return: True if the amf data was considered a response to a createStream message, else False.
+        :rtype: bool
+        """
         if amf_data['msg'] == rtmp_type.DT_COMMAND and len(amf_data['command']) is 4:
             if amf_data['command'][0] == '_result' and type(amf_data['command'][3]) is int:
                 log.info('create stream response received, stream id : %s' % amf_data['command'][3])
@@ -178,24 +223,12 @@ class RtmpClient:
             return False
         return False
 
-    def call(self, process_name, parameters=None, trans_id=0):
-        """ Runs remote procedure calls (RPC) at the receiving end. """
-        if parameters is None:
-            parameters = []  # parameters = {}
-        msg = {
-            'msg': rtmp_type.DT_COMMAND,
-            'command':
-            [
-                process_name,
-                trans_id,
-                parameters
-            ]
-        }
-        self.writer.write(msg)
-        self.writer.flush()
-
     def connect(self, connect_params=None):
-        """ Connect to the server with the given connect parameters. """
+        """ Connect to the remote server with the given connect parameters.
+
+        :param connect_params: A list or dict containing application specific connect parameters
+        :type connect_params: list | dict
+        """
         if self.proxy:
             parts = self.proxy.split(':')
             ip = parts[0]
@@ -220,7 +253,7 @@ class RtmpClient:
         self.reader = reader.RtmpReader(self.stream)
         self.writer = writer.RtmpWriter(self.stream)
 
-        self.connect_rtmp(connect_params)
+        self._connect_rtmp(connect_params)
 
     def shutdown(self):
         """ Closes the socket connection. """
@@ -237,13 +270,42 @@ class RtmpClient:
         so.use(self.reader, self.writer)
         self.shared_objects.append(so)
 
+    def _get_next_transaction_id(self):
+        """ Get the next transaction ID. """
+        transaction_id = self._transaction_id
+        self._transaction_id += 1
+        if self._transaction_id > 8388607:
+            self._transaction_id = 2
+        return transaction_id
+
+    def call(self, process_name, parameters=None, trans_id=0):
+        """ Runs remote procedure calls (RPC) at the receiving end.
+
+        :param process_name: The name of the remote method
+        :type process_name: str
+        :param parameters: A list of parameters to pass to the remote method.
+        :type parameters: list
+        :param trans_id: The transaction Id for this call.
+        :type trans_id: int
+        """
+        if parameters is None:
+            parameters = []
+        msg = {
+            'msg': rtmp_type.DT_COMMAND,
+            'command':
+            [
+                process_name,
+                trans_id,
+                None
+            ]
+        }
+        msg['command'].extend(parameters)
+
+        self.writer.write(msg)
+        self.writer.flush()
+
     def ping_request(self):
-        """
-        Send a PING request.
-        NOTE: I think its highly unlikely that a client would send this to a server,
-        it's usually the other way around, the sever sends this to the client to make sure the client is alive.
-        It does seem like some servers(all?) respond to this.
-        """
+        """ Send a PING request. """
         msg = {
             'msg': rtmp_type.DT_USER_CONTROL,
             'event_type': rtmp_type.UC_PING_REQUEST,
@@ -252,14 +314,6 @@ class RtmpClient:
         log.debug('sending ping request to server: %s' % msg)
         self.writer.write(msg)
         self.writer.flush()
-
-    def _get_next_transaction_id(self):
-        """ Get the next transaction ID. """
-        transaction_id = self._transaction_id
-        self._transaction_id += 1
-        if self._transaction_id > 8388607:
-            self._transaction_id = 2
-        return transaction_id
 
     def createstream(self):
         """ Send createStream message. """
@@ -289,10 +343,12 @@ class RtmpClient:
         self.writer.flush()
 
     def publish(self, publishing_name, publishing_type='live'):
-        """
-        Send publish message.
-        :param publishing_name: the name of the stream to publish
-        :param publishing_type: str publishing type. 'live, 'record' or 'append'
+        """ Send publish message.
+
+        :param publishing_name: The application specific publish name.
+        :type publishing_name: str | int
+        :param publishing_type: The publishing type. 'live, 'record' or 'append'
+        :type publishing_type: str
         """
         msg = {
             'msg': rtmp_type.DT_COMMAND,

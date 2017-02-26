@@ -15,15 +15,16 @@ pinylib was developed using [python 2.7.10](https://www.python.org/downloads/win
 
 ### Requirements
 
-pinylib requires 3 libraries that are not part of the standard python library, these being:
+pinylib requires 4 libraries that are not part of the standard python library, these being:
 
 * [pyamf](https://github.com/hydralabs/pyamf "pyamf")
 * [requests](https://github.com/kennethreitz/requests "requests")
 * [colorama](https://github.com/tartley/colorama "Colorama")
+* [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/bs4/doc/ "beautifulsoup4")
 
 These can all be installed form a command prompt with pip.
 
-`pip install pyamf requests colorama`
+`pip install pyamf requests colorama beautifulsoup4`
 
 
 For more info, see the [wiki](https://github.com/nortxort/pinylib/wiki/Requirements)
@@ -36,7 +37,7 @@ Run the client by typing `python path\to\sample_client.py` in a command prompt.
 ## Submitting an issue.
 Issues posted should be about pinylib and **only** pinylib. 
 
-Before submitting an issue, please read thru the [issues](https://github.com/nortxort/pinylib/issues) section, including already closed issues. If you do not find an answer to your issue, then please provide as much info as possible when opening an issue. Possible info could be:
+Before submitting an issue, please read through the [issues](https://github.com/nortxort/pinylib/issues) section, including already closed issues. If you do not find an answer to your issue, then please provide as much info as possible when opening an issue. Possible info could be:
 
 * Python version including subversion.
 * Pinylib version.

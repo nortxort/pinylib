@@ -1,5 +1,25 @@
 """ Functions to do different string operations with. """
 import random
+from web import quote, unquote
+
+
+def quote_str(input_str, safe=':,./&+?#=@'):
+    """
+    Quote a string.
+    :param input_str: str input string.
+    :param safe: str characters not to be quoted.
+    :return: str quoted string
+    """
+    return quote(input_str, safe=safe)
+
+
+def unquote_str(input_str):
+    """
+    Unquote a string.
+    :param input_str: str input string to unquote.
+    :return: str unquoted string
+    """
+    return unquote(input_str)
 
 
 def chunk_string(input_str, length):

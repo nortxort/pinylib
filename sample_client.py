@@ -39,7 +39,7 @@ def main():
         client.account = ''
         client.password = None
 
-    status = client.get_rtmp_parameters()
+    status = client.set_rtmp_parameters()
     while True:
         if status == 1:
             client.console_write(pinylib.COLOR['bright_red'], 'Password protected. Enter room password')
@@ -48,7 +48,7 @@ def main():
                 main()
                 break
             else:
-                status = client.get_rtmp_parameters()
+                status = client.set_rtmp_parameters()
         elif status == 2:
             client.console_write(pinylib.COLOR['bright_red'], 'The room has been closed.')
             main()
@@ -77,7 +77,7 @@ def main():
                 if client.is_green_connected:
                     client.disconnect(greenroom=True)
             elif cmd == '/a':
-                if len(client.users.signed_in) is 0:
+                if len(client.users.signed_in) == 0:
                     print ('No signed in users in the room.')
                 else:
                     for user in client.users.signed_in:
@@ -86,19 +86,19 @@ def main():
                 for user in client.users.all:
                     print ('%s: %s' % (user, client.users.all[user].user_level))
             elif cmd == '/m':
-                if len(client.users.mods) is 0:
+                if len(client.users.mods) == 0:
                     print ('No moderators in the room.')
                 else:
                     for mod in client.users.mods:
                         print (mod.nick)
             elif cmd == '/n':
-                if len(client.users.norms) is 0:
+                if len(client.users.norms) == 0:
                     print ('No normal users in the room.')
                 else:
                     for norm in client.users.norms:
                         print (norm.nick)
             elif cmd == '/l':
-                if len(client.users.lurkers) is 0:
+                if len(client.users.lurkers) == 0:
                     print ('No lurkers in the room.')
                 else:
                     for lurker in client.users.lurkers:

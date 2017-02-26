@@ -18,7 +18,7 @@ class User:
         self.join_time = time.time()
         self.tinychat_id = None
         self.last_login = None
-        self.user_level = 0
+        self.user_level = 5
         self.is_waiting = False
         # Extras.
         self.last_msg = None
@@ -37,17 +37,19 @@ class Users:
 
     @property
     def all(self):
-        """
-        All the users in the room.
-        :return: dict key value (User)
+        """ All the users in the room.
+
+        :return: Key value of users.
+        :rtype: dict
         """
         return self._users
 
     @property
     def mods(self):
-        """
-        All the moderators in the room.
-        :return: list all of the moderators objects (User) in the room.
+        """ All the moderators in the room.
+
+        :return: A list of all of the moderators User objects in the room.
+        :rtype: list
         """
         _mods = []
         for user in self.all:
@@ -57,9 +59,10 @@ class Users:
 
     @property
     def signed_in(self):
-        """
-        All user in the room using an account.
-        :return: list all the signed in users objects (User) in the room.
+        """ All user in the room using an account.
+
+        :return: A list of all the signed in User objects in the room.
+        :rtype: list
         """
         _signed_ins = []
         for user in self.all:
@@ -69,9 +72,10 @@ class Users:
 
     @property
     def lurkers(self):
-        """
-        All the lurkers in the room.
-        :return: list of all the lurker objects (User) in the room.
+        """ All the lurkers in the room.
+
+        :return: A list of all the lurker User objects in the room.
+        :rtype: list
         """
         _lurkers = []
         for user in self.all:
@@ -81,10 +85,11 @@ class Users:
 
     @property
     def norms(self):
-        """
-        All the normal users in the room.
+        """ All the normal users in the room.
+
         e.g users that are not moderators or lurkers.
-        :return: list of all the normal users objects (User) in the room.
+        :return: A list of all the normal User objects in the room.
+        :rtype: list
         """
         _regs = []
         for user in self.all:
@@ -97,22 +102,28 @@ class Users:
         self._users.clear()
 
     def add(self, user_info):
-        """
-        Add a user to the users dict.
-        :param user_info dict, tinychat user info.
-        :return user info object (User)
+        """ Add a user to the users dict.
+
+        :param user_info Tinychat user info.
+        :type user_info: dict
+        :return User info object
+        :rtype: User
         """
         if user_info['nick'] not in self.all:
             self._users[user_info['nick']] = User(**user_info)
         return self.all[user_info['nick']]
 
     def change(self, old_nick, new_nick, user_info):
-        """
-        Change a user nickname.
-        :param old_nick: str the user's old nickname.
-        :param new_nick: str the user's new nickname.
-        :param user_info: object, the user's user info (User)
+        """ Change a user nickname.
+
+        :param old_nick: The user's old nickname.
+        :type old_nick: str
+        :param new_nick: The user's new nickname.
+        :type new_nick: str
+        :param user_info: The user's user info.
+        :type user_info: User
         :return: True if changed, else False.
+        :rtype: bool
         """
         if self.delete(old_nick):
             if new_nick not in self.all:
@@ -122,10 +133,12 @@ class Users:
         return False
 
     def delete(self, user_name):
-        """
-        Delete a user from the Users class.
-        :param user_name: str the user to delete.
+        """ Delete a user from the Users class.
+
+        :param user_name: The user to delete.
+        :type user_name: str
         :return: True if deleted, else False.
+        :rtype: bool
         """
         if user_name in self.all:
             del self._users[user_name]
@@ -133,20 +146,24 @@ class Users:
         return False
 
     def search(self, user_name):
-        """
-        Search the Users class by nick name for a user.
-        :param user_name: str the user to find.
-        :return: if user name is found, object (User) else None
+        """ Search the Users class by nick name for a user.
+
+        :param user_name: The user to find.
+        :type user_name: str
+        :return: If user name is found, User else None.
+        :rtype: User | None
         """
         if user_name in self.all:
             return self.all[user_name]
         return None
 
     def search_by_id(self, user_id):
-        """
-        Search for a user by id.
-        :param user_id: str the users ID
-        :return if user id is found, object (User) else None
+        """ Search the Users class for a user by id.
+
+        :param user_id: The users ID
+        :type user_id: int | str
+        :return If user id is found, User else None
+        :rtype: User | None
         """
         for user in self.all:
             if str(self.all[user].id) == user_id:
@@ -154,10 +171,12 @@ class Users:
         return None
 
     def search_containing(self, contains):
-        """
-        Search users for a matching string within the user nick.
-        :param contains: str the string to search for in the nick.
-        :return: list of object (User) matching the contains string
+        """ Search users for a matching string within the user nick.
+
+        :param contains: The string to search for in the nick.
+        :type contains: str | int
+        :return: A list of User objects matching the contains string
+        :rtype: list
         """
         _users_containing = []
         for user in self.all:

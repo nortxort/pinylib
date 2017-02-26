@@ -21,6 +21,8 @@ def file_reader(file_path, file_name):
                         file_content.append(line.rstrip('\n'))
             except IOError as ioe:
                 log.error('failed to read file: %s path: %s IOError: %s' % (file_name, file_path, ioe))
+            finally:
+                return file_content
     return file_content
 
 
@@ -32,6 +34,7 @@ def file_writer(file_path, file_name, write_this):
     :param write_this: str the content to write.
     :return:
     """
+    # maybe return True if we could write and False if not
     if not os.path.exists(file_path):
         os.makedirs(file_path)
     with open(file_path + file_name, mode='a') as f:
