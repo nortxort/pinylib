@@ -1,9 +1,10 @@
 import logging
 import random
 import time
-import webbrowser
 from xml.dom.minidom import parseString
 from xml.parsers.expat import ExpatError
+
+from selenium import webdriver
 
 import util.web
 
@@ -21,7 +22,8 @@ class Params(object):
     _broadcast_token_url = 'https://tinychat.com/api/broadcast.pw?site=tinychat&name={0}&nick={1}&id={2}'
 
     def __init__(self, room_name, room_pass, swf_version, proxy=None):
-        """ Create a instance of the Params class.
+        """ 
+        Create a instance of the Params class.
 
         :param room_name: The name of the tinychat room.
         :type room_name: str
@@ -78,7 +80,8 @@ class Params(object):
 
     @property
     def config_status(self):
-        """ This method can be called to check if the RTMP properties were set successfully.
+        """ 
+        This method can be called to check if the RTMP properties were set successfully.
 
         :return: The current configurations status as int
         1 = the room is password protected.
@@ -161,7 +164,8 @@ class Params(object):
 
     @property
     def embed_url(self):
-        """ The html page the SWF file is embedded on.
+        """ 
+        The html page the SWF file is embedded on.
 
         :return: RTMP embed_url.
         :rtype: str
@@ -170,7 +174,8 @@ class Params(object):
 
     @property
     def desktop_version(self):
-        """ Specific application RTMP parameter.
+        """ 
+        Specific application RTMP parameter.
 
         :return: tinychat (desktop) version.
         :rtype: str
@@ -179,7 +184,8 @@ class Params(object):
 
     @property
     def swf_url(self):
-        """ The url to the SWF file.
+        """ 
+        The url to the SWF file.
 
         :return: RTMP swf_url
         :rtype: str
@@ -209,8 +215,9 @@ class Params(object):
         return conf
 
     def cauth_cookie(self):
-        """ This is needed to make a successful connection, it is not really a 'cookie',
-         but named so after it's name in the json response.
+        """ 
+        This is needed to make a successful connection, it is not really a 'cookie',
+        but named so after it's name in the json response.
 
         :return: The cuath cookie needed to make a connection.
         :rtype: str | None
@@ -225,15 +232,26 @@ class Params(object):
                 return _response['json']['cookie']
             return None
 
-    def recaptcha(self):
-        """ Check if we need to solve a captcha.
-
-        This will open in the default browser.
-
-        If we choose to not solve the captcha should it be required,
-        we will then be considered a 'lurker' and we will not be able to chat
-        and our name will be shown as a guest name in the room.
+    def _captcha_helper(self, token):
         """
+        Captcha helper method.
+
+        :param token: The recaptcha token.
+        :type token: str
+        """
+        driver = webdriver.Firefox()
+        _url = 'https://tinychat.com/{0}'.format(self.room_name)
+        driver.get(_url)
+
+        # execute the javascript.
+        driver.execute_script('ShowRecaptcha("' + token + '")')
+        raw_input('\nIf the captcha comes up in the browser, solve it, else click enter.')
+
+        # close the browser window.
+        driver.close()
+
+    def recaptcha(self):
+        """ Check if we need to solve a captcha. """
         t = str(random.uniform(0.9, 0.10))
         _url = 'https://tinychat.com/cauth/captcha?{0}'.format(t)
 
@@ -241,13 +259,11 @@ class Params(object):
         log.debug('recaptcha response: %s' % _response)
         if _response['json'] is not None:
             if _response['json']['need_to_solve_captcha'] == 1:
-                link = 'https://tinychat.com/cauth/recaptcha?token={0}'.format(_response['json']['token'])
-                webbrowser.open(link, new=True)
-                print (link)
-                raw_input('Solve the captcha and click enter to continue.')
+                self._captcha_helper(_response['json']['token'])
 
     def get_captcha_key(self, uid):
-        """ This key is required before starting to chat.
+        """ 
+        This key is required before starting to chat.
 
         :param uid: Client user identification.
         :type uid: int | str
@@ -264,7 +280,8 @@ class Params(object):
             return None
 
     def get_broadcast_token(self, nick, uid):
-        """ Token required to start a broadcast.
+        """ 
+        Token required to start a broadcast.
 
         :param nick: Client nick name
         :type nick: str

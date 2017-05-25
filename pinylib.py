@@ -15,7 +15,7 @@ from rtmplib import rtmp
 from page import acc, params
 from util import string_util, file_handler
 
-__version__ = '7.0.0'
+__version__ = '7.0.1'
 
 #  Console colors.
 COLOR = {

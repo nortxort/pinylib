@@ -15,16 +15,19 @@ pinylib was developed using [python 2.7.10](https://www.python.org/downloads/win
 
 ### Requirements
 
-pinylib requires 4 libraries that are not part of the standard python library, these being:
+pinylib requires 5 libraries that are not part of the standard python library, these being:
 
 * [pyamf](https://github.com/hydralabs/pyamf "pyamf")
 * [requests](https://github.com/kennethreitz/requests "requests")
 * [colorama](https://github.com/tartley/colorama "Colorama")
 * [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/bs4/doc/ "beautifulsoup4")
+* [selenium](http://selenium-python.readthedocs.io/)
 
 These can all be installed form a command prompt with pip.
 
-`pip install pyamf requests colorama beautifulsoup4`
+`pip install pyamf requests colorama beautifulsoup4 selenium`
+
+In the case of selenium, read the [installation documentation](http://selenium-python.readthedocs.io/installation.html) as it requires a [driver](http://selenium-python.readthedocs.io/installation.html#drivers).
 
 
 For more info, see the [wiki](https://github.com/nortxort/pinylib/wiki/Requirements)
